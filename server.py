@@ -30,11 +30,11 @@ def get_public_ip_address():
 def client_thread(connection, address):
     """  """
     # sends a message to the client whose user object is conn
-    connection.send(b'Welcome to this chatroom!')
+    connection.send("Welcome to this chatroom!".encode())
 
     while True:
         try:
-            message = connection.recv(2048)
+            message = connection.recv(10)
             if message:
                 print("<" + address[0] + "> " + message)
 
@@ -66,6 +66,7 @@ def remove(connection):
 
 if __name__ == "__main__":
     ip = str(get_public_ip_address())
+    print(ip)
     port = 60000
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -83,7 +84,7 @@ if __name__ == "__main__":
         print(address[0] + " connected")
 
         # creates and individual thread for every user that connects
-        start_new_thread(clientthread,(connection,address))
+        start_new_thread(client_thread,(connection,address))
 
     connection.close()
     server.close()
