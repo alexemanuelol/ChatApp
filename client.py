@@ -4,16 +4,39 @@ import socket
 import select
 import sys
 
+from _thread import *
+
 HOST = "81.26.242.196"
 #HOST = "127.0.0.1"
 PORT = 60000
 
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.connect((HOST, PORT))
-    s.sendall(b'Hello, world')
-    data = s.recv(1024)
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.connect((HOST, PORT))
 
-print('Received', repr(data))
+def receive():
+    while True:
+        try:
+            msg = sock.recv(10).decode("utf-8")
+            print(msg)
+        except OSError:
+            break
+
+
+start_new_thread(receive,())
+
+while True:
+    command = input()
+    if command == "!q":
+        sock.close()
+        exit()
+    sock.sendall(command.encode("utf-8"))
+
+#with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+#    s.connect((HOST, PORT))
+#    s.sendall(b'Hello, world')
+#    data = s.recv(1024)
+
+#print('Received', repr(data))
 
 
 
