@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 
-"""  """
-
-
 import socket
 import select
 import sys
@@ -13,77 +10,90 @@ import json
 from _thread import *
 
 
-# Global variables
-list_of_clients = []
-
-
-def get_public_ip_address():
-    """ Send a request to ipinfo.io to retreive public ip address """
-    response = requests.get("https://ipinfo.io/json", verify = True)
-    if response.status_code != 200:
-        print("Status: " + response.status_code + ". Problem with the request. Exiting")
-        exit()
-    data = response.json()
-    return data["ip"]
-
-
-def client_thread(connection, address):
+class chat_server():
     """  """
-    # sends a message to the client whose user object is conn
-    connection.send(b'Welcome to this chatroom!')
 
-    while True:
-        try:
-            message = connection.recv(2048)
-            if message:
-                print("<" + address[0] + "> " + message)
+    def __init__(self, port):
+        """  """
+        self.listOfClients = []
 
-                # Calls broadcast function to send message to all
-                message_to_send = "<" + address[0] + "> " + message
-                broadcast(message_to_send, connection)
-            else:
-                remove(connection)
-        except:
-            continue
+        self.host = self.get_public_ip_address()
+        self.port = port
+
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        self.server.bind(("", self.port))
+        self.server.listen(10)
 
 
-def broadcast(message, connection):
-    """  """
-    for client in list_of_clients:
-        if client != connection:
+    def get_public_ip_address(self):
+        """ Send a request to ipinfo.io to retreive public ip address. """
+        response = requests.get("https://ipinfo.io/json", verify = True)
+        if response.status_code != 200:
+            print("Status: " + response.status_code + ". Problem with the request. Exiting")
+            exit()
+        data = response.json()
+        return data["ip"]
+
+
+    def client_thread(self, connection, address):
+        """  """
+        connection.send("Welcome to this chatroom!".encode())
+
+        while True:
             try:
-                client.send(message)
+                message = connection.recv(2048)
+                if message.decode() != "":
+                    print("<" + str(address[0]) + "> " + message.decode())
+                    message_to_send = "<" + str(address[0]) + "> " + message.decode()
+                    self.broadcast(message_to_send, connection)
             except:
-                client.close()
-                remove(client)
+                self.remove(connection, address)
+                break
 
 
-def remove(connection):
-    """  """
-    if connection in list_of_clients:
-        list_of_clients.remove(connection)
+    def broadcast(self, message, connection):
+        """ Broadcasts the message to all other clients. """
+        for (conn, address) in self.listOfClients:
+            if conn != connection:
+                try:
+                    conn.send(message.encode())
+                except:
+                    conn.close()
+                    self.remove(conn, address)
+
+
+    def remove(self, connection, address):
+        """  """
+        if (connection, address) in self.listOfClients:
+            print(str(address[0]) + " left the chat.")
+            self.listOfClients.remove((connection, address))
+
+
+    def run(self):
+        """  """
+        print("Server hosted on:")
+        print("IP Address:   " + self.host)
+        print("port:         " + str(self.port))
+
+        while True:
+            try:
+                connection, address = self.server.accept()
+
+                self.listOfClients.append((connection, address))
+
+                print(address[0] + " connected!")
+
+                start_new_thread(self.client_thread, (connection, address))
+            except:
+                break
+
+        connection.close()
+        self.server.close()
+
 
 
 if __name__ == "__main__":
-    ip = str(get_public_ip_address())
-    port = 60000
-
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-    server.bind(("", port))
-    server.listen(10)
-
-    while True:
-        connection, address = server.accept()
-
-        list_of_clients.append(connection)
-
-        # prints the address of the user that just connected
-        print(address[0] + " connected")
-
-        # creates and individual thread for every user that connects
-        start_new_thread(clientthread,(connection,address))
-
-    connection.close()
-    server.close()
+    cs = chat_server(60000)
+    cs.run()
