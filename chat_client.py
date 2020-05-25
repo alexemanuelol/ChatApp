@@ -3,53 +3,72 @@
 import socket
 import select
 import sys
+import readchar
 
-HOST = "81.26.242.196"
-#HOST = "127.0.0.1"
-PORT = 60000
-
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.connect((HOST, PORT))
-    s.sendall(b'Hello, world')
-    data = s.recv(1024)
-
-print('Received', repr(data))
+from _thread import *
 
 
+class chat_client():
+    """  """
 
-#server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-#if len(sys.argv) != 3:
-#    print("Correct usage: script, IP address, port number")
-#    exit()
+    def __init__(self, host, port):
+        """  """
+        self.host = host
+        self.port = port
 
-#IP_address = str(sys.argv[1])
-#Port = int(sys.argv[2])
-#IP_address = "127.0.0.1"
-#Port = 60000
-#server.connect((IP_address, Port))
-#
-#while True:
-#    # maintains a list of possible input streams
-#    sockets_list = [sys.stdin, server]
-#
-#    """ There are two possible input situations. Either the
-#    user wants to give  manual input to send to other people,
-#    or the server is sending a message  to be printed on the
-#    screen. Select returns from sockets_list, the stream that
-#    is reader for input. So for example, if the server wants
-#    to send a message, then the if condition will hold true
-#    below.If the user wants to send a message, the else
-#    condition will evaluate as true"""
-#    read_sockets,write_socket, error_socket = select.select(sockets_list,[],[])
-#
-#    for socks in read_sockets:
-#        if socks == server:
-#            message = socks.recv(2048)
-#            print(message)
-#        else:
-#            message = sys.stdin.readline()
-#            server.send(message)
-#            sys.stdout.write("<You>")
-#            sys.stdout.write(message)
-#            sys.stdout.flush()
-#server.close()
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client.connect((self.host, self.port))
+
+        self.stop = False
+
+
+    def __receive_thread(self):
+        """  """
+        while True:
+            try:
+                data = self.client.recv(1024)
+                data = data.decode()
+                if data != "":
+                    print(data)
+            except:
+                continue
+
+
+    def run(self):
+        """  """
+        start_new_thread(self.__receive_thread, ())
+
+        while True:
+            send = input()
+            if send != "":
+                if send == "!q":
+                    self.stop = True
+                    break
+                self.client.sendall(send.encode())
+
+
+
+if __name__ == "__main__":
+    print("Enter the password:")
+    string = ""
+    passwd = "Hejsan"
+
+    while True:
+        char = readchar.readkey()
+
+        if char == "\r":
+            if string == passwd:
+                print("Correct password!")
+                break
+            else:
+                print("Incorrect password, try again...")
+                string = ""
+                continue
+
+        string += char
+
+    cc = chat_client("81.26.242.196", 60000)
+    cc.run()
+
+
+
