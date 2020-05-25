@@ -69,6 +69,3 @@ if __name__ == "__main__":
 
     cc = chat_client(SERVER_IP, 60000)
     cc.run()
-
-
-
