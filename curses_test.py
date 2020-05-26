@@ -78,32 +78,12 @@ class chat_client():
     def run(self):
         """  """
         while True:
-            resize = curses.is_term_resized(self.screenHeight, self.screenWidth)
-            if resize is True:
-                self.lineQueue.append("before height: " + str(self.screenHeight))
-                self.lineQueue.append("before width: " + str(self.screenWidth))
-                self.screenHeight, self.screenWidth = self.screen.getmaxyx()
-                self.lineQueue.append("after height: " + str(self.screenHeight))
-                self.lineQueue.append("after width: " + str(self.screenWidth))
-                #self.screen.clear()
-                #curses.update_lines_cols()
-                #curses.endwin()
-                #self.screen = curses.initscr()
-                #curses.noecho()
-                #self.screenHeight, self.screenWidth = self.screen.getmaxyx()
-                #self.screenWidth, self.screenHeight = os.get_terminal_size()
-
-                #curses.resize_term(self.screenHeight, self.screenWidth)
-                #self.screenHeight, self.screenWidth = self.screen.getmaxyx()
-                pass
-                #self.screenHeight, self.screenWidth = self.screen.getmaxyx()
-
             self.update()
             char = self.screen.getch()
             if char == 27: # ESC
                 break
             elif char == curses.KEY_RESIZE:
-                self.lineQueue.append("RESIZED#####")
+                self.screenHeight, self.screenWidth = self.screen.getmaxyx()
             elif char == 10: # ENTER
                 self.append_to_line_queue()
             elif char == 8 or char == 127: # BACKSPACE
