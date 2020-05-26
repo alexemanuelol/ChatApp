@@ -1,56 +1,119 @@
 import curses
 import time
+import os
 
-screen = curses.initscr()
-curses.noecho()
-screenSize = screen.getmaxyx()
+from textwrap import wrap
 
-screenHeight = screenSize[0]
-screenWidth = screenSize[1]
 
-textbox = []
-
-inputString = ""
-inputDisplay = ""
-
-def update_input_box():
+class chat_client():
     """  """
-    if len(inputString) >= 5:#screenWidth-2:
-        inputDisplay = inputString[-5:]
-    else:
-        inputDisplay = inputString
-    screen.addstr(screenHeight-1, 0, "> " + inputDisplay)
 
-char = None
-while True:
-    screen.clear()
-    for index, line in enumerate(textbox):
-        screen.addstr(index, 0, line)
-    #screen.addstr(screenHeight-1, 0, "> " + inputString)
-    update_input_box()
-    screen.refresh()
-    char = screen.getch()
-    if char == 27: # ESC
-        break
-    elif char == 10: # ENTER
-        if inputString != "":
-            if len(textbox) == screenHeight-2:
-                textbox.pop(0)
-            textbox.append(inputString)
-            inputString = ""
-    elif char == 8 or char == 127: # BACKSPACE
-        if inputString != "":
-            inputString = inputString[:-1]
-    else:
-        if len(inputString) == screenWidth-3:
-            pass
+    def __init__(self):
+        """  """
+        self.screen = curses.initscr()
+        curses.noecho()
+
+        self.screenHeight, self.screenWidth = self.screen.getmaxyx()
+        self.textboxHeight = self.screenHeight - 2
+        self.lineWidth = self.screenWidth - 3
+
+        self.lineQueue = []
+        self.lineQueueDisplay = []
+
+        self.inputString = ""
+
+
+    def update_screen_size(self):
+        """  """
+        self.screenHeight, self.screenWidth = self.screen.getmaxyx()
+        self.textboxHeight = self.screenHeight - 2
+        self.lineWidth = self.screenWidth - 3
+
+
+    def update_input_string_display(self):
+        """  """
+        displayString = ""
+        if len(self.inputString) >= self.lineWidth:
+            displayString = self.inputString[-self.lineWidth:]
         else:
-            inputString += str(chr(char))
+            displayString = self.inputString
+        self.screen.addstr(self.screenHeight-1, 0, "> " + displayString)
 
 
-curses.endwin()
+    def update_textbox(self):
+        """  """
+        displayText = []
+        if len(self.lineQueue) >= self.textboxHeight:
+            displayText = self.lineQueue[-self.textboxHeight:]
+        else:
+            displayText = self.lineQueue
+
+        for index, line in enumerate(displayText):
+            self.screen.addstr(index, 0, line)
 
 
-print(inputString)
-print("\n\n")
-print(inputDisplay)
+    def update_refresh(self):
+        """  """
+        self.screen.refresh()
+
+
+    def update(self):
+        """  """
+        self.screen.clear()
+        self.update_screen_size()
+        self.update_textbox()
+        self.update_input_string_display()
+        self.update_refresh()
+
+
+    def append_to_line_queue(self):
+        """  """
+        if self.inputString != "":
+            lines = wrap(self.inputString, self.screenWidth)
+            for line in lines:
+                self.lineQueue.append(line)
+            self.inputString = ""
+
+
+    def run(self):
+        """  """
+        while True:
+            resize = curses.is_term_resized(self.screenHeight, self.screenWidth)
+            if resize is True:
+                self.lineQueue.append("before height: " + str(self.screenHeight))
+                self.lineQueue.append("before width: " + str(self.screenWidth))
+                self.screenHeight, self.screenWidth = self.screen.getmaxyx()
+                self.lineQueue.append("after height: " + str(self.screenHeight))
+                self.lineQueue.append("after width: " + str(self.screenWidth))
+                #self.screen.clear()
+                #curses.update_lines_cols()
+                #curses.endwin()
+                #self.screen = curses.initscr()
+                #curses.noecho()
+                #self.screenHeight, self.screenWidth = self.screen.getmaxyx()
+                #self.screenWidth, self.screenHeight = os.get_terminal_size()
+
+                #curses.resize_term(self.screenHeight, self.screenWidth)
+                #self.screenHeight, self.screenWidth = self.screen.getmaxyx()
+                pass
+                #self.screenHeight, self.screenWidth = self.screen.getmaxyx()
+
+            self.update()
+            char = self.screen.getch()
+            if char == 27: # ESC
+                break
+            elif char == curses.KEY_RESIZE:
+                self.lineQueue.append("RESIZED#####")
+            elif char == 10: # ENTER
+                self.append_to_line_queue()
+            elif char == 8 or char == 127: # BACKSPACE
+                self.inputString = self.inputString[:-1]
+            else:
+                self.inputString += str(chr(char))
+
+        curses.endwin()
+
+
+if __name__ == "__main__":
+    client = chat_client()
+    client.run()
