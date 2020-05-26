@@ -79,17 +79,19 @@ class chat_client():
         """  """
         while True:
             self.update()
-            char = self.screen.getch()
-            if char == 27: # ESC
+            char = self.screen.get_wch()
+            if char == "\x1b": # ESC
                 break
+            elif char == "\x00":
+                pass
             elif char == curses.KEY_RESIZE:
                 self.screenHeight, self.screenWidth = self.screen.getmaxyx()
-            elif char == 10: # ENTER
+            elif char == "\n": # ENTER
                 self.append_to_line_queue()
-            elif char == 8 or char == 127: # BACKSPACE
+            elif char == "\x08": # BACKSPACE
                 self.inputString = self.inputString[:-1]
             else:
-                self.inputString += str(chr(char))
+                self.inputString += char
 
         curses.endwin()
 
