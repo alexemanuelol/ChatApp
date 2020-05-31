@@ -1,6 +1,7 @@
 import curses
 import time
 import os
+import datetime
 
 from textwrap import wrap
 
@@ -9,24 +10,35 @@ class chat_client():
     """  """
 
     def __init__(self):
-        """  """
+        """ Class initialization. """
         self.screen = curses.initscr()
         self.screen.keypad(True)
         curses.noecho()
 
-        self.screenHeightMin = 13
-        self.screenWidthMin = 30
+        curses.start_color()
+        curses.use_default_colors()
 
-        self.screenHeight, self.screenWidth = self.screen.getmaxyx()
-        self.textboxHeight = self.screenHeight - 2
-        self.lineWidth = self.screenWidth - 3
+        self.colors = {
+            "black" : 1,
+            "blue" : 2,
+            "green" : 3,
+            "cyan" : 4,
+            "red" : 5,
+            "magenta" : 6,
+            "yellow" : 7,
+            "white" : 8,
+        }
 
+        for color, value in self.colors.items():
+            curses.init_pair(value, value - 1, -1)
+
+        self.update_screen_size()
+
+        self.messages = []
         self.lineQueue = []
-        self.lineQueueDisplay = []
         self.scrollIndex = 0
 
         self.inputString = ""
-        self.displayStringPos = 0
 
         self.cursorPos = 0
         self.visualCursorPos = 0
@@ -36,24 +48,14 @@ class chat_client():
 
 
     def update_screen_size(self):
-        """  """
+        """ Update the screen size. """
         self.screenHeight, self.screenWidth = self.screen.getmaxyx()
         self.textboxHeight = self.screenHeight - 2
         self.lineWidth = self.screenWidth - 3
 
 
-    def update_input_string_display(self):
-        """  """
-        displayString = ""
-        if len(self.inputString) >= self.lineWidth:
-            displayString = self.inputString[self.visualLeftPos:self.visualRightPos]
-        else:
-            displayString = self.inputString
-        self.screen.addstr(self.screenHeight-1, 0, "> " + displayString)
-
-
     def update_textbox(self):
-        """  """
+        """ Update the textbox with data from self.lineQueue. """
         displayText = []
         if len(self.lineQueue) >= self.textboxHeight:
             displayText = self.lineQueue[-self.textboxHeight + self.scrollIndex:][:self.textboxHeight]
@@ -64,42 +66,68 @@ class chat_client():
             self.screen.addstr(index, 0, line)
 
 
+    def update_inputbox(self):
+        """ Update the inputbox with data from self.inputString. """
+        self.visualLeftPos = self.cursorPos - self.visualCursorPos
+        self.visualRightPos = self.visualLeftPos + self.lineWidth
+
+        displayString = ""
+        if len(self.inputString) >= self.lineWidth:
+            displayString = self.inputString[self.visualLeftPos:self.visualRightPos]
+        else:
+            displayString = self.inputString
+        self.screen.addstr(self.screenHeight-1, 0, "> " + displayString)
+
+
     def update_visual_cursor(self):
-        """  """
+        """ Update the visual cursor in the inputbox. """
         self.screen.move(self.screenHeight-1, self.visualCursorPos+2)
 
 
     def update_refresh(self):
-        """  """
+        """ Refresh the screen. """
         self.screen.refresh()
 
 
     def update(self):
-        """  """
+        """ Update all. """
         self.screen.clear()
         self.update_screen_size()
         self.update_textbox()
-        self.update_input_string_display()
+        self.update_inputbox()
         self.update_visual_cursor()
         self.update_refresh()
 
 
-    def append_to_line_queue(self):
-        """  """
-        if self.inputString != "":
-            lines = wrap(self.inputString, self.screenWidth)
+    def append_message(self, message):
+        """ Append a message to self.messages and self.lineQueue. """
+        self.messages.append(message)
+        if message != "":
+            lines = wrap(message, self.screenWidth)
             for line in lines:
                 self.lineQueue.append(line)
-            self.inputString = ""
 
 
+    def update_message_formatting(self):
+        """ Update messages dependent on screen width. """
+        self.lineQueue = []
+        for message in self.messages:
+            lines = wrap(message, self.screenWidth)
+            for line in lines:
+                self.lineQueue.append(line)
+
+
+    def get_time(self):
+        """ Returns the current time in format 'HH:MM:SS'. """
+        time = datetime.datetime.now().strftime("%H:%M:%S")
+        return time
+
+    # TODO, Update formatting and structure of code in this function
     def run(self):
         """  """
-        self.visualLeftPos = self.cursorPos - self.visualCursorPos
-        self.visualRightPos = (self.lineWidth - self.visualCursorPos) + self.cursorPos
         self.update()
 
-        while self.screenWidth > self.screenWidthMin and self.screenHeight > self.screenHeightMin:
+        while True:
 
             char = self.screen.get_wch()
 
@@ -124,7 +152,10 @@ class chat_client():
             elif char == "\x00":                # WINDOWS KEY
                 pass
             elif char == curses.KEY_RESIZE:     # RESIZE EVENT
-                self.screenHeight, self.screenWidth = self.screen.getmaxyx()
+                self.cursorPos = 0
+                self.visualCursorPos = 0
+                self.update_screen_size()
+                self.update_message_formatting()
             elif char == 262:                   # HOME KEY
                 self.visualCursorPos = 0
                 self.cursorPos = 0
@@ -135,7 +166,8 @@ class chat_client():
                     self.visualCursorPos = len(self.inputString)
                 self.cursorPos = len(self.inputString)
             elif char == "\n":                  # ENTER KEY
-                self.append_to_line_queue()
+                self.append_message(self.inputString)
+                self.inputString = ""
                 self.scrollIndex = 0
                 self.visualCursorPos = 0
                 self.cursorPos = 0
@@ -160,9 +192,6 @@ class chat_client():
                     self.visualCursorPos += 1
                 self.cursorPos += 1
 
-            self.visualLeftPos = self.cursorPos - self.visualCursorPos
-            self.visualRightPos = self.visualLeftPos + self.lineWidth
-
             self.update()
 
         curses.endwin()
@@ -172,3 +201,7 @@ class chat_client():
 if __name__ == "__main__":
     client = chat_client()
     client.run()
+
+
+# Use colors:
+# screen.addstr(message, curses.color_pair(1))
