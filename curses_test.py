@@ -34,6 +34,8 @@ class chat_client():
 
         self.update_screen_size()
 
+        self.userName = "User"
+
         self.messages = []
         self.lineQueue = []
         self.scrollIndex = 0
@@ -79,6 +81,15 @@ class chat_client():
         self.screen.addstr(self.screenHeight-1, 0, "> " + displayString)
 
 
+    def update_message_formatting(self):
+        """ Update messages dependent on screen width. """
+        self.lineQueue = []
+        for message in self.messages:
+            lines = wrap(message, self.screenWidth)
+            for line in lines:
+                self.lineQueue.append(line)
+
+
     def update_visual_cursor(self):
         """ Update the visual cursor in the inputbox. """
         self.screen.move(self.screenHeight-1, self.visualCursorPos+2)
@@ -99,22 +110,13 @@ class chat_client():
         self.update_refresh()
 
 
-    def append_message(self, message):
+    def append_message(self, message, sender, time):
         """ Append a message to self.messages and self.lineQueue. """
+        message = time + " " + sender + ": " + message
         self.messages.append(message)
-        if message != "":
-            lines = wrap(message, self.screenWidth)
-            for line in lines:
-                self.lineQueue.append(line)
-
-
-    def update_message_formatting(self):
-        """ Update messages dependent on screen width. """
-        self.lineQueue = []
-        for message in self.messages:
-            lines = wrap(message, self.screenWidth)
-            for line in lines:
-                self.lineQueue.append(line)
+        lines = wrap(message, self.screenWidth)
+        for line in lines:
+            self.lineQueue.append(line)
 
 
     def get_time(self):
@@ -122,7 +124,7 @@ class chat_client():
         time = datetime.datetime.now().strftime("%H:%M:%S")
         return time
 
-    # TODO, Update formatting and structure of code in this function
+
     def run(self):
         """  """
         self.update()
@@ -166,7 +168,8 @@ class chat_client():
                     self.visualCursorPos = len(self.inputString)
                 self.cursorPos = len(self.inputString)
             elif char == "\n":                  # ENTER KEY
-                self.append_message(self.inputString)
+                if self.inputString != "":
+                    self.append_message(self.inputString, self.userName, self.get_time())
                 self.inputString = ""
                 self.scrollIndex = 0
                 self.visualCursorPos = 0
@@ -186,6 +189,14 @@ class chat_client():
                     self.visualCursorPos -= 1
                 if self.cursorPos != 0:
                     self.cursorPos -= 1
+            elif char == 339:                   # PAGE UP
+                self.scrollIndex -= self.textboxHeight
+                if self.scrollIndex < -(len(self.lineQueue) - self.textboxHeight):
+                    self.scrollIndex = -(len(self.lineQueue) - self.textboxHeight)
+            elif char == 338:                   # PAGE DOWN
+                self.scrollIndex += self.textboxHeight
+                if self.scrollIndex > 0:
+                    self.scrollIndex = 0
             else:                               # Append characters to self.inputString
                 self.inputString = self.inputString[:self.cursorPos] + str(char) + self.inputString[self.cursorPos:]
                 if self.visualCursorPos != self.lineWidth:
