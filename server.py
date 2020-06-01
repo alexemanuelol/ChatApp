@@ -68,7 +68,8 @@ class chat_server():
     def remove(self, connection, address):
         """  """
         if (connection, address) in self.listOfClients:
-            print(str(address[0]) + " left the chat.")
+            print(str(address[0]) + " just disconnected.")
+            self.broadcast(address[0] + " just disconnected.", connection)
             self.listOfClients.remove((connection, address))
 
 
