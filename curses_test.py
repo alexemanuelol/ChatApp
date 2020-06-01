@@ -1,15 +1,22 @@
+#!/usr/bin/env python3
+
+import socket
+import select
+import sys
+import readchar
 import curses
 import time
 import os
 import datetime
 
 from textwrap import wrap
+from _thread import *
 
 
 class chat_client():
     """  """
 
-    def __init__(self):
+    def __init__(self, host, port):
         """ Class initialization. """
         self.screen = curses.initscr()
         self.screen.keypad(True)
@@ -36,6 +43,14 @@ class chat_client():
 
         self.userName = "User"
 
+        self.host = host
+        self.port = port
+
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client.connect((self.host, self.port))
+
+        self.stop = False
+
         self.messages = []
         self.lineQueue = []
         self.scrollIndex = 0
@@ -47,6 +62,20 @@ class chat_client():
 
         self.visualLeftPos = 0
         self.visualRightPos = 0
+
+
+    def __receive_thread(self):
+        """  """
+        while True:
+            try:
+                data = self.client.recv(1024)
+                data = data.decode()
+                if data != "":
+                    self.append_message(data, self.get_time(), curses.color_pair(self.colors["green"]))
+                    self.update()
+                    #print(data)
+            except:
+                continue
 
 
     def update_screen_size(self):
@@ -65,7 +94,7 @@ class chat_client():
             displayText = self.lineQueue
 
         for index, line in enumerate(displayText):
-            self.screen.addstr(index, 0, line)
+            self.screen.addstr(index, 0, line[0], line[1])
 
 
     def update_inputbox(self):
@@ -84,10 +113,10 @@ class chat_client():
     def update_message_formatting(self):
         """ Update messages dependent on screen width. """
         self.lineQueue = []
-        for message in self.messages:
+        for message, color in self.messages:
             lines = wrap(message, self.screenWidth)
             for line in lines:
-                self.lineQueue.append(line)
+                self.lineQueue.append([line, color])
 
 
     def update_visual_cursor(self):
@@ -110,13 +139,13 @@ class chat_client():
         self.update_refresh()
 
 
-    def append_message(self, message, sender, time):
+    def append_message(self, message, time, color):
         """ Append a message to self.messages and self.lineQueue. """
-        message = time + " " + sender + ": " + message
-        self.messages.append(message)
+        message = time + " " + message
+        self.messages.append([message, color])
         lines = wrap(message, self.screenWidth)
         for line in lines:
-            self.lineQueue.append(line)
+            self.lineQueue.append([line, color])
 
 
     def get_time(self):
@@ -128,6 +157,8 @@ class chat_client():
     def run(self):
         """  """
         self.update()
+
+        start_new_thread(self.__receive_thread, ())
 
         while True:
 
@@ -169,7 +200,8 @@ class chat_client():
                 self.cursorPos = len(self.inputString)
             elif char == "\n":                  # ENTER KEY
                 if self.inputString != "":
-                    self.append_message(self.inputString, self.userName, self.get_time())
+                    self.append_message(self.inputString, self.get_time(), curses.color_pair(self.colors["white"]))
+                    self.client.sendall(self.inputString.encode())
                 self.inputString = ""
                 self.scrollIndex = 0
                 self.visualCursorPos = 0
@@ -210,9 +242,5 @@ class chat_client():
 
 
 if __name__ == "__main__":
-    client = chat_client()
+    client = chat_client("81.26.242.196", 60000)
     client.run()
-
-
-# Use colors:
-# screen.addstr(message, curses.color_pair(1))
