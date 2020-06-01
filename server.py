@@ -40,6 +40,7 @@ class chat_server():
     def client_thread(self, connection, address):
         """  """
         connection.send("Welcome to this chatroom!".encode())
+        self.broadcast(address[0] + " just connected." ,connection)
 
         while True:
             try:
