@@ -3,6 +3,7 @@
 import socket
 import select
 import sys
+import configparser
 
 import requests
 import json
@@ -15,6 +16,9 @@ class chat_server():
 
     def __init__(self, port):
         """  """
+        self.config = configparser.ConfigParser()
+        self.config.read("config.ini")
+
         self.listOfClients = []
 
         self.host = self.get_public_ip_address()
@@ -25,6 +29,11 @@ class chat_server():
 
         self.server.bind(("", self.port))
         self.server.listen(10)
+
+    def save_config(self):
+        """  """
+        with open("config.ini", "w") as configfile:
+            self.config.write(configfile)
 
 
     def get_public_ip_address(self):
@@ -37,40 +46,51 @@ class chat_server():
         return data["ip"]
 
 
-    def client_thread(self, connection, address):
+    def client_thread(self, connection, address, username):
         """  """
         connection.send("Welcome to this chatroom!".encode())
-        self.broadcast(address[0] + " just connected." ,connection)
+        self.broadcast(username + " just connected." ,connection)
 
         while True:
             try:
                 message = connection.recv(2048)
                 if message.decode() != "":
-                    print("<" + str(address[0]) + "> " + message.decode())
-                    message_to_send = "<" + str(address[0]) + "> " + message.decode()
+                    if message.decode().startswith("!setUsername "):
+                        self.listOfClients.remove((connection, address, username))
+                        oldName = username
+                        username = message.decode().replace("!setUsername ", "")
+                        self.config["Users"][address[0]] = username
+                        self.save_config()
+                        self.listOfClients.append((connection, address, username))
+                        print("<SERVER> " + oldName + " changed name to " + username)
+                        self.broadcast("<SERVER> " + oldName + " changed name to " + username, "placeholder")
+                        continue
+
+                    print("<" + username + "> " + message.decode())
+                    message_to_send = "<" + username + "> " + message.decode()
                     self.broadcast(message_to_send, connection)
             except:
-                self.remove(connection, address)
+                self.remove(connection, address, username)
                 break
 
 
     def broadcast(self, message, connection):
         """ Broadcasts the message to all other clients. """
-        for (conn, address) in self.listOfClients:
+        for (conn, address, username) in self.listOfClients:
             if conn != connection:
                 try:
                     conn.send(message.encode())
                 except:
                     conn.close()
-                    self.remove(conn, address)
+                    self.remove(conn, address, username)
 
 
-    def remove(self, connection, address):
+    def remove(self, connection, address, username):
         """  """
-        if (connection, address) in self.listOfClients:
-            print(str(address[0]) + " just disconnected.")
-            self.broadcast(address[0] + " just disconnected.", connection)
-            self.listOfClients.remove((connection, address))
+        if (connection, address, username) in self.listOfClients:
+            print(username + " just disconnected.")
+            self.broadcast(username + " just disconnected.", connection)
+            self.listOfClients.remove((connection, address, username))
 
 
     def run(self):
@@ -83,11 +103,19 @@ class chat_server():
             try:
                 connection, address = self.server.accept()
 
-                self.listOfClients.append((connection, address))
+                username = ""
+                if self.config.has_option("Users", address[0]):
+                    username = self.config["Users"][address[0]]
+                else:
+                    self.config["Users"][address[0]] = address[0]
+                    username = address[0]
+                self.save_config()
 
-                print(address[0] + " connected!")
+                self.listOfClients.append((connection, address, username))
 
-                start_new_thread(self.client_thread, (connection, address))
+                print(username + " connected!")
+
+                start_new_thread(self.client_thread, (connection, address, username))
             except:
                 break
 
