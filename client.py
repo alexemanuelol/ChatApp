@@ -192,7 +192,7 @@ class chat_client():
             elif char == 262:                   # HOME KEY
                 self.visualCursorPos = 0
                 self.cursorPos = 0
-            elif char == 358:                   # END KEY
+            elif char == 358 or char == 360:    # END KEY
                 if len(self.inputString) >= self.lineWidth:
                     self.visualCursorPos = self.lineWidth
                 else:
@@ -212,7 +212,7 @@ class chat_client():
                 if len(self.inputString) >= self.lineWidth:
                     if len(self.inputString) == (self.visualRightPos - 1) and self.visualCursorPos != self.lineWidth:
                         self.visualCursorPos += 1
-            elif char == "\x08":                # BACKSPACE KEY
+            elif char == "\x08" or char == 263: # BACKSPACE KEY
                 self.inputString = self.inputString[:self.cursorPos][:-1] + self.inputString[self.cursorPos:]
 
                 if self.visualCursorPos != 0 and len(self.inputString) <= self.lineWidth and self.visualLeftPos == 0:
