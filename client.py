@@ -141,9 +141,13 @@ class chat_client():
 
     def append_message(self, message, time, color):
         """ Append a message to self.messages and self.lineQueue. """
-        message = time + " " + message
+        first_line = time + " " + message[0:message.find(">") + 1]
+        message = message[message.find(">") + 1:]
+
+        self.messages.append([first_line, curses.color_pair(self.colors["white"]) | curses.A_STANDOUT])
         self.messages.append([message, color])
         lines = wrap(message, self.screenWidth)
+        self.lineQueue.append([first_line, curses.color_pair(self.colors["white"]) | curses.A_STANDOUT])
         for line in lines:
             self.lineQueue.append([line, color])
 
@@ -200,7 +204,7 @@ class chat_client():
                 self.cursorPos = len(self.inputString)
             elif char == "\n":                  # ENTER KEY
                 if self.inputString != "":
-                    self.append_message(self.inputString, self.get_time(), curses.color_pair(self.colors["white"]))
+                    self.append_message("< You >" + self.inputString, self.get_time(), curses.color_pair(self.colors["white"]))
                     self.client.sendall(self.inputString.encode())
                 self.inputString = ""
                 self.scrollIndex = 0
