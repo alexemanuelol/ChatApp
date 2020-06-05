@@ -48,7 +48,7 @@ class chat_server():
 
     def client_thread(self, connection, address, username):
         """  """
-        connection.send("Welcome to this chatroom!".encode())
+        connection.send("<SERVER>Welcome to this chatroom!".encode())
         self.broadcast(username + " just connected." ,connection)
 
         while True:
@@ -63,11 +63,11 @@ class chat_server():
                         self.save_config()
                         self.listOfClients.append((connection, address, username))
                         print("<SERVER> " + oldName + " changed name to " + username)
-                        self.broadcast("<SERVER> " + oldName + " changed name to " + username, "placeholder")
+                        self.broadcast("<SERVER>" + oldName + " changed name to " + username, "placeholder")
                         continue
 
                     print("<" + username + "> " + message.decode())
-                    message_to_send = "<" + username + "> " + message.decode()
+                    message_to_send = "< " + username + " >" + message.decode()
                     self.broadcast(message_to_send, connection)
             except:
                 self.remove(connection, address, username)
