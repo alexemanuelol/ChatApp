@@ -8,6 +8,7 @@ import curses
 import time
 import os
 import datetime
+import pickle
 
 from textwrap import wrap
 from _thread import *
@@ -41,8 +42,6 @@ class chat_client():
 
         self.update_screen_size()
 
-        self.userName = "User"
-
         self.host = host
         self.port = port
 
@@ -68,12 +67,31 @@ class chat_client():
         """  """
         while True:
             try:
-                data = self.client.recv(1024)
-                data = data.decode()
-                if data != "":
-                    self.append_message(data, self.get_time(), curses.color_pair(self.colors["green"]))
-                    self.update()
-                    #print(data)
+                received = self.client.recv(2048)
+                package = pickle.loads(received)
+
+                if len(package) == 4:
+                    pType = package[0]
+                    pRequ = package[1]
+                    pFrom = package[2]
+                    pData = package[3]
+
+                    if pType == 0:          # Forward type
+                        self.append_message(pFrom, pData, self.get_time(), curses.color_pair(self.colors["green"]))
+                        self.update()
+
+                    elif pType == 1:        # Notification type
+                        self.append_notification(pFrom, pData, self.get_time(), curses.color_pair(self.colors["yellow"]))
+                        self.update()
+
+                    elif pType == 2:        # Request type
+                        if pRequ == 0:          # Users online
+                            for line in pData:
+                                self.messages.append([line, curses.color_pair(self.colors["yellow"])])
+                                self.lineQueue.append([line, curses.color_pair(self.colors["yellow"])])
+                            self.update()
+                        pass
+
             except:
                 continue
 
@@ -139,10 +157,9 @@ class chat_client():
         self.update_refresh()
 
 
-    def append_message(self, message, time, color):
+    def append_message(self, sender, message, time, color):
         """ Append a message to self.messages and self.lineQueue. """
-        first_line = time + " " + message[0:message.find(">") + 1]
-        message = message[message.find(">") + 1:]
+        first_line = time + " " + "< " + sender + " >"
 
         self.messages.append([first_line, curses.color_pair(self.colors["white"]) | curses.A_STANDOUT])
         self.messages.append([message, color])
@@ -152,10 +169,29 @@ class chat_client():
             self.lineQueue.append([line, color])
 
 
+    def append_notification(self, sender, notification, time, color):
+        """  """
+        line = time + " < " + sender + " > " + notification
+        self.messages.append([line, color])
+        self.lineQueue.append([line, color])
+
+
     def get_time(self):
         """ Returns the current time in format 'HH:MM:SS'. """
         time = datetime.datetime.now().strftime("%H:%M:%S")
         return time
+
+
+    def command_handler(self, string):
+        """  """
+        if string.startswith("!setNickname "):
+            string = string.replace("!setNickname ", "")
+            self.client.send(pickle.dumps([2, 0, string]))
+            return True
+        elif string == "!users":
+            self.client.send(pickle.dumps([2, 1, string]))
+            return True
+        return False
 
 
     def run(self):
@@ -204,8 +240,9 @@ class chat_client():
                 self.cursorPos = len(self.inputString)
             elif char == "\n":                  # ENTER KEY
                 if self.inputString != "":
-                    self.append_message("< You >" + self.inputString, self.get_time(), curses.color_pair(self.colors["white"]))
-                    self.client.sendall(self.inputString.encode())
+                    if not self.command_handler(self.inputString):
+                        self.append_message("You", self.inputString, self.get_time(), curses.color_pair(self.colors["white"]))
+                        self.client.send(pickle.dumps([0, 0, self.inputString]))
                 self.inputString = ""
                 self.scrollIndex = 0
                 self.visualCursorPos = 0

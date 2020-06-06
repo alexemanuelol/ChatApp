@@ -4,6 +4,7 @@ import socket
 import select
 import sys
 import configparser
+import pickle
 
 import requests
 import json
@@ -19,8 +20,6 @@ class chat_server():
         self.config = configparser.ConfigParser()
         self.config.read("config.ini")
 
-        self.listOfClients = []
-
         self.host = self.get_public_ip_address()
         self.port = port
 
@@ -30,7 +29,10 @@ class chat_server():
         self.server.bind(("", self.port))
         self.server.listen(10)
 
-    def save_config(self):
+        self.clients = []
+
+
+    def write_config(self):
         """  """
         with open("config.ini", "w") as configfile:
             self.config.write(configfile)
@@ -46,51 +48,91 @@ class chat_server():
         return data["ip"]
 
 
-    def client_thread(self, connection, address, username):
+    def client_thread(self, connection, address):
         """  """
-        connection.send("<SERVER>Welcome to this chatroom!".encode())
-        self.broadcast(username + " just connected." ,connection)
+        nickname = self.get_nickname(address[0])
+        connection.send(pickle.dumps([0, 0, "SERVER", "Welcome to ChatApp!"]))
+        self.broadcast(1, 0, "SERVER", nickname + " just connected.", connection)
 
         while True:
             try:
-                message = connection.recv(2048)
-                if message.decode() != "":
-                    if message.decode().startswith("!setUsername "):
-                        self.listOfClients.remove((connection, address, username))
-                        oldName = username
-                        username = message.decode().replace("!setUsername ", "")
-                        self.config["Users"][address[0]] = username
-                        self.save_config()
-                        self.listOfClients.append((connection, address, username))
-                        print("<SERVER> " + oldName + " changed name to " + username)
-                        self.broadcast("<SERVER>" + oldName + " changed name to " + username, "placeholder")
-                        continue
+                received = connection.recv(2048)
+                package = pickle.loads(received)
+                print("Incoming package: " + str(package))
+                if len(package) == 3:
+                    pType = package[0]
+                    pRequ = package[1]
+                    pData = package[2]
 
-                    print("<" + username + "> " + message.decode())
-                    message_to_send = "< " + username + " >" + message.decode()
-                    self.broadcast(message_to_send, connection)
-            except:
-                self.remove(connection, address, username)
+                    if pType == 0:          # Forward type
+                        print("< " + nickname + " > " + pData)
+                        self.broadcast(0, 0, nickname, pData, connection)
+
+                    elif pType == 1:        # Notification type
+                        pass
+
+                    elif pType == 2:        # Request type
+                        if pRequ == 0:          # Nickname change
+                            oldNickname = self.get_nickname(address[0])
+                            self.set_nickname(address[0], pData)
+                            nickname = self.get_nickname(address[0])
+                            print("< SERVER > " + oldNickname + " changed nickname to " + nickname)
+                            self.broadcast(1, 0, "SERVER", oldNickname + " changed nickname to " + nickname)
+                        elif pRequ == 1:        # Users online
+                            users = self.get_users(connection)
+                            connection.send(pickle.dumps([2, 0, None, users]))
+
+            except Exception as e:
+                #print(e)
+                self.remove(connection, address)
                 break
 
 
-    def broadcast(self, message, connection):
+    def broadcast(self, pType, pRequ, pFrom, pData, ignored = None):
         """ Broadcasts the message to all other clients. """
-        for (conn, address, username) in self.listOfClients:
-            if conn != connection:
+        for (connection, address) in self.clients:
+            if connection != ignored:
                 try:
-                    conn.send(message.encode())
+                    connection.send(pickle.dumps([pType, pRequ, pFrom, pData]))
                 except:
-                    conn.close()
-                    self.remove(conn, address, username)
+                    connection.close()
+                    self.remove(connection, address)
 
 
-    def remove(self, connection, address, username):
+    def remove(self, connection, address):
         """  """
-        if (connection, address, username) in self.listOfClients:
-            print(username + " just disconnected.")
-            self.broadcast(username + " just disconnected.", connection)
-            self.listOfClients.remove((connection, address, username))
+        if (connection, address) in self.clients:
+            nickname = self.get_nickname(address[0])
+            print(nickname + " just disconnected.")
+            self.broadcast(1, 0, "SERVER", nickname + " just disconnected.", connection)
+            self.clients.remove((connection, address))
+
+
+    def get_nickname(self, ip):
+        """  """
+        if self.config.has_option("Users", ip):
+            return self.config["Users"][ip]
+        return False
+
+
+    def set_nickname(self, ip, nickname = None):
+        """  """
+        if nickname == None:
+            if not self.config.has_option("Users", ip):
+                self.config["Users"][ip] = ip
+        else:
+            self.config["Users"][ip] = nickname
+        self.write_config()
+        self.config.read("config.ini")
+
+
+    def get_users(self, ignored = None):
+        """  """
+        users = []
+        for (connection, address) in self.clients:
+            if connection != ignored:
+                users.append(self.get_nickname(address[0]))
+        return users
 
 
     def run(self):
@@ -103,20 +145,19 @@ class chat_server():
             try:
                 connection, address = self.server.accept()
 
-                username = ""
-                if self.config.has_option("Users", address[0]):
-                    username = self.config["Users"][address[0]]
-                else:
-                    self.config["Users"][address[0]] = address[0]
-                    username = address[0]
-                self.save_config()
-
-                self.listOfClients.append((connection, address, username))
+                # Set initial nickname
+                self.set_nickname(address[0])
+                username = self.get_nickname(address[0])
 
                 print(username + " connected!")
 
-                start_new_thread(self.client_thread, (connection, address, username))
-            except:
+                # Append connection to currently connected clients
+                self.clients.append((connection, address))
+
+                # Start client read thread
+                start_new_thread(self.client_thread, (connection, address))
+            except Exception as e:
+                #print(e)
                 break
 
         connection.close()
