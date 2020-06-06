@@ -51,7 +51,7 @@ class chat_server():
     def client_thread(self, connection, address):
         """  """
         nickname = self.get_nickname(address[0])
-        connection.send(pickle.dumps([0, 0, "SERVER", "Welcome to ChatApp!"]))
+        connection.send(pickle.dumps([1, 0, "SERVER", "Welcome to ChatApp!"]))
         self.broadcast(1, 0, "SERVER", nickname + " just connected.", connection)
 
         while True:
