@@ -9,3 +9,4 @@ A simple command line chat
 - CLIENT: Keep log of conversations? on client?
 - CLIENT: Clear the chat window
 - CLIENT: Make it possible to disconnect and connect, setPort, setIP etc...
+- SERVER: encrypt messages
