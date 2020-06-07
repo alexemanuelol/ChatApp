@@ -58,7 +58,7 @@ class chat_server():
             try:
                 received = connection.recv(2048)
                 package = pickle.loads(received)
-                print("Incoming package: " + str(package))
+                print("Incoming package from < " + nickname + " >: " + str(package))
                 if len(package) == 3:
                     pType = package[0]
                     pRequ = package[1]
