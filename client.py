@@ -87,6 +87,8 @@ class chat_client():
                     elif pType == 2:        # Request type
                         if pRequ == 0:          # Users online
                             for line in pData:
+                                if self.scrollIndex != 0:
+                                    self.scrollIndex -= 1
                                 self.messages.append([line, curses.color_pair(self.colors["yellow"])])
                                 self.lineQueue.append([line, curses.color_pair(self.colors["yellow"])])
                             self.update()
@@ -165,13 +167,23 @@ class chat_client():
         self.messages.append([message, color])
         lines = wrap(message, self.screenWidth)
         self.lineQueue.append([first_line, curses.color_pair(self.colors["white"]) | curses.A_STANDOUT])
+
+        if self.scrollIndex != 0:
+            self.scrollIndex -= 1
+
         for line in lines:
+            if self.scrollIndex != 0:
+                self.scrollIndex -= 1
             self.lineQueue.append([line, color])
 
 
     def append_notification(self, sender, notification, time, color):
         """  """
         line = time + " < " + sender + " > " + notification
+
+        if self.scrollIndex != 0:
+            self.scrollIndex -= 1
+
         self.messages.append([line, color])
         self.lineQueue.append([line, color])
 
