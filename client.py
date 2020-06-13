@@ -18,7 +18,7 @@ from _thread import *
 class chat_client():
     """  """
 
-    def __init__(self, host, port):
+    def __init__(self, host, portChat, portVoice):
         """ Class initialization. """
         self.screen = curses.initscr()
         self.screen.keypad(True)
@@ -44,12 +44,14 @@ class chat_client():
         self.update_screen_size()
 
         self.host = host
-        self.port = port
+        self.portChat = portChat
+        self.portVoice = portVoice
 
-        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.client.connect((self.host, self.port))
+        self.clientChat = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.clientChat.connect((self.host, self.portChat))
 
-        self.active = True
+        self.chatActive = True
+        self.voiceActive = False
 
         self.messages = []
         self.lineQueue = []
@@ -75,9 +77,9 @@ class chat_client():
 
     def __receive_thread(self):
         """  """
-        while self.active:
+        while self.chatActive:
             try:
-                received = self.client.recv(2048)
+                received = self.clientChat.recv(2048)
                 package = pickle.loads(received)
 
                 if len(package) == 4:
@@ -208,13 +210,44 @@ class chat_client():
         """  """
         if string.startswith("!setNickname "):
             string = string.replace("!setNickname ", "")
-            self.client.send(pickle.dumps([2, 0, string]))
+            self.clientChat.send(pickle.dumps([2, 0, string]))
             return True
         elif string == "!users":
-            self.client.send(pickle.dumps([2, 1, string]))
+            self.clientChat.send(pickle.dumps([2, 1, string]))
+            return True
+        elif string == "!voice":
+            if self.voiceActive:
+                self.voiceActive = False
+                self.clientVoice.close()
+            else:
+                self.voiceActive = True
+                self.clientVoice = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.clientVoice.connect((self.host, self.portVoice))
+                start_new_thread(self.voice_receive, ())
+                start_new_thread(self.voice_send, ())
             return True
 
         return False
+
+
+    def voice_receive(self):
+        """  """
+        while self.voiceActive:
+            try:
+                data = self.clientVoice.recv(1024)
+                self.playing_stream.write(data)
+            except:
+                pass
+
+
+    def voice_send(self):
+        """  """
+        while self.voiceActive:
+            try:
+                data = self.recording_stream.read(1024)
+                self.clientVoice.sendall(data)
+            except:
+                pass
 
 
     def run(self):
@@ -266,7 +299,7 @@ class chat_client():
                 if self.inputString != "":
                     if not self.command_handler(self.inputString):
                         self.append_message("You", self.inputString, self.get_time(), curses.color_pair(self.colors["white"]))
-                        self.client.send(pickle.dumps([0, 0, self.inputString]))
+                        self.clientChat.send(pickle.dumps([0, 0, self.inputString]))
                 self.inputString = ""
                 self.scrollIndex = 0
                 self.visualCursorPos = 0
@@ -307,12 +340,12 @@ class chat_client():
     def exit(self):
         """  """
         self.voiceActive = False
-        self.active = False
+        self.chatActive = False
 
 
 
 if __name__ == "__main__":
-    client = chat_client(SERVER_IP, 60000)
+    client = chat_client(SERVER_IP, 60000, 60001)
     client.run()
 
 
