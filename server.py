@@ -41,12 +41,13 @@ class chat_server():
         self.socketVoice.bind(("", self.portVoice))
         self.socketVoice.listen(self.MAX_USERS)
 
+        # Initialize lists to store active clients
         self.clientsChat = []
         self.clientsVoice = []
 
 
     def run(self):
-        """  """
+        """ The main function call. """
         print("Server hosted on:")
         print("IP Address:   " + self.host)
         print("port chat:    " + str(self.portChat))
@@ -57,19 +58,22 @@ class chat_server():
 
 
     def wait_incoming_voice_request(self):
-        """  """
+        """ Constantly wait for a incoming socket connect request for voice. """
         while True:
             try:
                 # Wait for incoming connection request
                 connection, address = self.socketVoice.accept()
+
+                print(self.get_nickname(address[0]) + " joined voice chat.")
 
                 # Append connection to clientsVoice
                 self.clientsVoice.append((connection, address))
 
                 # Start voice thread
                 start_new_thread(self.voice_thread, (connection, address))
+
             except Exception as e:
-                #print(repr(e))
+                print(repr(e))
                 break
 
         connection.close()
@@ -77,7 +81,7 @@ class chat_server():
 
 
     def wait_incoming_chat_request(self):
-        """  """
+        """ Constantly wait for a incoming socket connect request for chat. """
         while True:
             try:
                 # Wait for incoming connection request
@@ -85,16 +89,17 @@ class chat_server():
 
                 # Set initial nickname
                 self.set_nickname(address[0])
-                username = self.get_nickname(address[0])
-                print(username + " connected!")
+
+                print(self.get_nickname(address[0]) + " connected!")
 
                 # Append connection to clientsChat
                 self.clientsChat.append((connection, address))
 
                 # Start chat thread
                 start_new_thread(self.chat_thread, (connection, address))
+
             except Exception as e:
-                #print(repr(e))
+                print(repr(e))
                 break
 
         connection.close()
@@ -102,7 +107,9 @@ class chat_server():
 
 
     def voice_thread(self, connection, address):
-        """  """
+        """ Individual voice thread for clients. """
+        nickname = self.get_nickname(address[0])
+        self.broadcast_chat(1, 0, "SERVER", nickname + " just joined voice chat.")
         while True:
             try:
                 data = connection.recv(1024)
@@ -110,15 +117,15 @@ class chat_server():
 
             except Exception as e:
                 #print(repr(e))
-                self.remove(connection, address, self.clientsVoice)
+                self.remove_voice(connection, address)
                 break
 
 
     def chat_thread(self, connection, address):
-        """  """
+        """ Individual chat thread for clients. """
         nickname = self.get_nickname(address[0])
         connection.send(pickle.dumps([1, 0, "SERVER", "Welcome to ChatApp!"]))
-        self.broadcast(1, 0, "SERVER", nickname + " just connected.", connection)
+        self.broadcast_chat(1, 0, "SERVER", nickname + " just connected.", connection)
 
         while True:
             try:
@@ -133,7 +140,7 @@ class chat_server():
 
                     if pType == 0:          # Forward type
                         print("< " + nickname + " > " + pData)
-                        self.broadcast(0, 0, nickname, pData, connection)
+                        self.broadcast_chat(0, 0, nickname, pData, connection)
 
                     elif pType == 1:        # Notification type
                         print(nickname + ":  " + str(len(data)))
@@ -144,35 +151,33 @@ class chat_server():
                             self.set_nickname(address[0], pData)
                             nickname = self.get_nickname(address[0])
                             print("< SERVER > " + oldNickname + " changed nickname to " + nickname)
-                            self.broadcast(1, 0, "SERVER", oldNickname + " changed nickname to " + nickname)
+                            self.broadcast_chat(1, 0, "SERVER", oldNickname + " changed nickname to " + nickname)
                         elif pRequ == 1:        # Users online
                             users = self.get_users(connection)
                             connection.send(pickle.dumps([2, 0, None, users]))
 
             except Exception as e:
                 #print(repr(e))
-                self.remove(connection, address, self.clientsChat)
+                self.remove_chat(connection, address)
                 break
 
 
-    def remove(self, connection, address, clientsList):
-        """  """
-        if (connection, address) in clientsList:
+    def remove_voice(self, connection, address):
+        """ Remove the connection from clientsVoice list. """
+        if (connection, address) in self.clientsVoice:
+            nickname = self.get_nickname(address[0])
+            print(nickname + " just left voice chat.")
+            self.broadcast_chat(1, 0, "SERVER", nickname + " just left voice chat.")
+            self.clientsVoice.remove((connection, address))
+
+
+    def remove_chat(self, connection, address):
+        """ Remove the connection from clientsChat list. """
+        if (connection, address) in self.clientsChat:
             nickname = self.get_nickname(address[0])
             print(nickname + " just disconnected.")
-            self.broadcast(1, 0, "SERVER", nickname + " just disconnected.", connection)
-            self.clientsList.remove((connection, address))
-
-
-    def broadcast_chat(self, pType, pRequ, pFrom, pData, ignored = None):
-        """ Broadcasts the message to all other clients. """
-        for (connection, address) in self.clientsChat:
-            if connection != ignored:
-                try:
-                    connection.send(pickle.dumps([pType, pRequ, pFrom, pData]))
-                except:
-                    connection.close()
-                    self.remove(connection, address, self.clientsChat)
+            self.broadcast_chat(1, 0, "SERVER", nickname + " just disconnected.", connection)
+            self.clientsChat.remove((connection, address))
 
 
     def broadcast_voice(self, data, ignored = None):
@@ -183,11 +188,22 @@ class chat_server():
                     connection.send(data)
                 except:
                     connection.close()
-                    self.remove(connection, address, self.clientsVoice)
+                    self.remove_voice(connection, address)
+
+
+    def broadcast_chat(self, pType, pRequ, pFrom, pData, ignored = None):
+        """ Broadcasts the message to all other clients. """
+        for (connection, address) in self.clientsChat:
+            if connection != ignored:
+                try:
+                    connection.send(pickle.dumps([pType, pRequ, pFrom, pData]))
+                except:
+                    connection.close()
+                    self.remove_chat(connection, address)
 
 
     def write_config(self):
-        """  """
+        """ Write to config file. """
         with open("config.ini", "w") as configfile:
             self.config.write(configfile)
 
@@ -203,14 +219,14 @@ class chat_server():
 
 
     def get_nickname(self, ip):
-        """  """
+        """ Get the nickname associated with the ip. """
         if self.config.has_option("Users", ip):
             return self.config["Users"][ip]
         return False
 
 
     def set_nickname(self, ip, nickname = None):
-        """  """
+        """ Set a nickname for a specific ip. """
         if nickname == None:
             if not self.config.has_option("Users", ip):
                 self.config["Users"][ip] = ip
@@ -221,7 +237,7 @@ class chat_server():
 
 
     def get_users(self, ignored = None):
-        """  """
+        """ Returns a list of all connected users. """
         users = []
         for (connection, address) in self.clientsChat:
             if connection != ignored:
