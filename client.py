@@ -9,6 +9,7 @@ import time
 import os
 import datetime
 import pickle
+import pyaudio
 
 from textwrap import wrap
 from _thread import *
@@ -48,7 +49,7 @@ class chat_client():
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.connect((self.host, self.port))
 
-        self.stop = False
+        self.active = True
 
         self.messages = []
         self.lineQueue = []
@@ -62,10 +63,19 @@ class chat_client():
         self.visualLeftPos = 0
         self.visualRightPos = 0
 
+        # PyAudio
+        chunk_size = 1024
+        audio_format = pyaudio.paInt16
+        channels = 1
+        rate = 20000
+
+        self.p = pyaudio.PyAudio()
+        self.playing_stream = self.p.open(format=audio_format, channels=channels, rate=rate, output=True, frames_per_buffer=chunk_size)
+        self.recording_stream = self.p.open(format=audio_format, channels=channels, rate=rate, input=True, frames_per_buffer=chunk_size)
 
     def __receive_thread(self):
         """  """
-        while True:
+        while self.active:
             try:
                 received = self.client.recv(2048)
                 package = pickle.loads(received)
@@ -92,9 +102,9 @@ class chat_client():
                                 self.messages.append([line, curses.color_pair(self.colors["yellow"])])
                                 self.lineQueue.append([line, curses.color_pair(self.colors["yellow"])])
                             self.update()
-                        pass
 
-            except:
+            except Exception as e:
+                #print(repr(e))
                 continue
 
 
@@ -203,6 +213,7 @@ class chat_client():
         elif string == "!users":
             self.client.send(pickle.dumps([2, 1, string]))
             return True
+
         return False
 
 
@@ -217,6 +228,7 @@ class chat_client():
             char = self.screen.get_wch()
 
             if char == "\x1b":                  # ESC KEY
+                self.exit()
                 break
             elif char == 259:                   # ARROW UP KEY (Scroll up)
                 if len(self.lineQueue) + self.scrollIndex > self.textboxHeight:
@@ -291,6 +303,11 @@ class chat_client():
             self.update()
 
         curses.endwin()
+
+    def exit(self):
+        """  """
+        self.voiceActive = False
+        self.active = False
 
 
 
