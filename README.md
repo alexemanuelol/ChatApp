@@ -15,4 +15,14 @@ A simple command line chat
 
 ## Setup
 
+### Windows
 - https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio
+
+
+### Linux
+- Run the following commands
+``` bash
+sudo apt-get install libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0
+sudo apt-get install ffmpeg libav-tools
+sudo pip3 install pyaudio
+```
