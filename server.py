@@ -152,6 +152,19 @@ class chat_server():
                         users = self.get_users(connection)
                         self.chat_send(2, None, users, connection)
 
+                    elif pRequ == 3:            # Notify all with nickname
+                        self.chat_broadcast(1, "SERVER", nickname + " " + pData)
+
+                    elif pRequ == 4:            # Notify all, except sender with nickname
+                        self.chat_broadcast(1, "SERVER", nickname + " " + pData, connection)
+
+                    elif pRequ == 5:            # Notify all
+                        self.chat_broadcast(1, "SERVER", pData)
+
+                    elif pRequ == 6:            # Notify all, except sender
+                        self.chat_broadcast(1, "SERVER", pData, connection)
+
+
             except Exception as e:
                 #print(repr(e))
                 self.remove_chat(connection, address)
@@ -197,7 +210,10 @@ class chat_server():
             nickname = self.get_nickname(address[0])
             print(nickname + " just left voice chat.")
             self.chat_broadcast(1, "SERVER", nickname + " just left voice chat.")
-            self.clientsVoice.remove((connection, address))
+            try:
+                self.clientsVoice.remove((connection, address))
+            except:
+                pass
 
 
     def remove_chat(self, connection, address):
@@ -206,7 +222,10 @@ class chat_server():
             nickname = self.get_nickname(address[0])
             print(nickname + " just disconnected.")
             self.chat_broadcast(1, "SERVER", nickname + " just disconnected.", connection)
-            self.clientsChat.remove((connection, address))
+            try:
+                self.clientsChat.remove((connection, address))
+            except:
+                pass
 
 
     def write_config(self):

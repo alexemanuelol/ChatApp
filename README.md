@@ -10,17 +10,27 @@ A simple command line chat
 - CLIENT: Clear the chat window
 - CLIENT: Make it possible to disconnect and connect, setPort, setIP etc...
 - SERVER: encrypt messages
+- CLIENT: Set input mic
+- CLIENT: Set output speaker
 
 
 
 ## Setup
 
 ### Windows
-- https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio
+
+- Install appropriate .whl file from: https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio
+- Run the following command
+
+``` bash
+pip3 install pyaudio
+```
 
 
 ### Linux
+
 - Run the following commands
+
 ``` bash
 sudo apt-get install libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0
 sudo apt-get install ffmpeg libav-tools

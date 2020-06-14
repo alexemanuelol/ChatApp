@@ -51,7 +51,6 @@ class chat_client():
         self.clientChat = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.clientChat.connect((self.host, self.portChat))
         self.chatActive = True
-        self.voiceActive = False
 
         # Curses display items
         self.inputString = ""
@@ -81,6 +80,10 @@ class chat_client():
                                                     rate = rate,
                                                     input = True,
                                                     frames_per_buffer = chunkSize)
+        # voice actions
+        self.voiceActive = False
+        self.voiceMicMuted = False
+        self.voiceHeadsetMuted = False
 
 
     def run(self):
@@ -228,7 +231,8 @@ class chat_client():
         while self.voiceActive:
             try:
                 data = self.clientVoice.recv(1024)
-                self.playingStream.write(data)
+                if not self.voiceHeadsetMuted:
+                    self.playingStream.write(data)
             except:
                 pass
 
@@ -238,7 +242,8 @@ class chat_client():
         while self.voiceActive:
             try:
                 data = self.recordingStream.read(1024)
-                self.clientVoice.sendall(data)
+                if not self.voiceMicMuted:
+                    self.clientVoice.sendall(data)
             except:
                 pass
 
@@ -259,16 +264,42 @@ class chat_client():
             self.send(2, string)
             return True
 
-        elif string == "!voice":
-            if self.voiceActive:
-                self.voiceActive = False
-                self.clientVoice.close()
-            else:
+        elif string == "!voice on":
+            if self.voiceActive == False:
                 self.voiceActive = True
                 self.clientVoice = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.clientVoice.connect((self.host, self.portVoice))
                 start_new_thread(self.__voice_receive_thread, ())
                 start_new_thread(self.__voice_send_thread, ())
+            return True
+        elif string == "!voice off":
+            if self.voiceActive == True:
+                self.voiceActive = False
+                self.clientVoice.close()
+            return True
+
+        elif string == "!mute mic":
+            if self.voiceMicMuted == False and self.voiceActive:
+                self.voiceMicMuted = True
+                self.send(3, "just muted mic.")
+            return True
+
+        elif string == "!unmute mic":
+            if self.voiceMicMuted == True and self.voiceActive:
+                self.voiceMicMuted = False
+                self.send(3, "just unmuted mic.")
+            return True
+
+        elif string == "!mute headset":
+            if self.voiceHeadsetMuted == False and self.voiceActive:
+                self.voiceHeadsetMuted = True
+                self.send(3, "just muted headset.")
+            return True
+
+        elif string == "!unmute headset":
+            if self.voiceHeadsetMuted == True and self.voiceActive:
+                self.voiceHeadsetMuted = False
+                self.send(3, "just unmuted headset.")
             return True
 
         return False
