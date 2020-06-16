@@ -7,9 +7,9 @@ import requests
 import select
 import socket
 import sys
+import time
 
 from _thread import *
-
 
 class chat_server():
     """  """
@@ -93,6 +93,7 @@ class chat_server():
 
                 # Append connection to clientsChat
                 self.clientsChat.append((connection, address))
+                self.chat_send(1, "SERVER", "Welcome to ChatApp!", connection)
 
                 # Start chat thread
                 start_new_thread(self.__chat_thread, (connection, address))
@@ -123,8 +124,10 @@ class chat_server():
     def __chat_thread(self, connection, address):
         """ Individual chat thread for clients. """
         nickname = self.get_nickname(address[0])
-        self.chat_send(1, "SERVER", "Welcome to ChatApp!", connection)
+        time.sleep(.5)
+        self.send_update_online_users()
         self.chat_broadcast(1, "SERVER", nickname + " just connected.", connection)
+
 
         while True:
             try:
@@ -147,6 +150,7 @@ class chat_server():
                         nickname = self.get_nickname(address[0])
                         print("< SERVER > " + oldNickname + " changed nickname to " + nickname)
                         self.chat_broadcast(1, "SERVER", oldNickname + " changed nickname to " + nickname)
+                        self.send_update_online_users()
 
                     elif pRequ == 2:            # Users online
                         users = self.get_users(connection)
@@ -154,15 +158,19 @@ class chat_server():
 
                     elif pRequ == 3:            # Notify all, nickname's mic has been muted
                         self.chat_broadcast(1, "SERVER", nickname + " just muted mic.")
+                        self.send_update_online_users()
 
                     elif pRequ == 4:            # Notify all, nickname's mic has been unmuted
                         self.chat_broadcast(1, "SERVER", nickname + " just unmuted mic.")
+                        self.send_update_online_users()
 
-                    elif pRequ == 5:            # Notify all, nickname's headset has been muted
+                    elif pRequ == 5:            # Notify all, nickname's headset has been mute
                         self.chat_broadcast(1, "SERVER", nickname + " just muted headset.")
+                        self.send_update_online_users()
 
                     elif pRequ == 6:            # Notify all, nickname's headset has been unmuted
                         self.chat_broadcast(1, "SERVER", nickname + " just unmuted headset.")
+                        self.send_update_online_users()
 
 
             except Exception as e:
@@ -224,6 +232,7 @@ class chat_server():
             self.chat_broadcast(1, "SERVER", nickname + " just disconnected.", connection)
             try:
                 self.clientsChat.remove((connection, address))
+                self.send_update_online_users()
             except:
                 pass
 
@@ -260,6 +269,13 @@ class chat_server():
             self.config["Users"][ip] = nickname
         self.write_config()
         self.config.read("config.ini")
+
+
+    def send_update_online_users(self):
+        """ Update all clients about online users. """
+        users = self.get_users()
+        self.chat_broadcast(3, None, users)
+
 
 
     def get_users(self, ignored = None):

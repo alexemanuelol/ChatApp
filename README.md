@@ -11,7 +11,6 @@ A simple command line chat
 - SERVER: encrypt messages
 - CLIENT: Set input mic
 - CLIENT: Set output speaker
-- CLIENT: show online users
 
 
 ## Setup
