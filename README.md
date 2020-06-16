@@ -7,15 +7,17 @@ A simple command line chat
 - SERVER: Password for server, a function before clientThread? Set the password for server in the beginning
 - SERVER: emoji functions? !smile !wink different...
 - CLIENT: Keep log of conversations? on client?
-- CLIENT: Clear the chat window
 - CLIENT: Make it possible to disconnect and connect, setPort, setIP etc...
 - SERVER: encrypt messages
 - CLIENT: Set input mic
 - CLIENT: Set output speaker
-
+- CLIENT: show online users
 
 
 ## Setup
+
+
+## Contributing
 
 ### Windows
 
@@ -36,3 +38,8 @@ sudo apt-get install libasound-dev portaudio19-dev libportaudio2 libportaudiocpp
 sudo apt-get install ffmpeg libav-tools
 sudo pip3 install pyaudio
 ```
+
+
+## Known errors
+
+- Only possible to be two current voice chat users at a time, otherwise overflow on the server causing delay in voice data.

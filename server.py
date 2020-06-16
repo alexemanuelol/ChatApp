@@ -152,17 +152,17 @@ class chat_server():
                         users = self.get_users(connection)
                         self.chat_send(2, None, users, connection)
 
-                    elif pRequ == 3:            # Notify all with nickname
-                        self.chat_broadcast(1, "SERVER", nickname + " " + pData)
+                    elif pRequ == 3:            # Notify all, nickname's mic has been muted
+                        self.chat_broadcast(1, "SERVER", nickname + " just muted mic.")
 
-                    elif pRequ == 4:            # Notify all, except sender with nickname
-                        self.chat_broadcast(1, "SERVER", nickname + " " + pData, connection)
+                    elif pRequ == 4:            # Notify all, nickname's mic has been unmuted
+                        self.chat_broadcast(1, "SERVER", nickname + " just unmuted mic.")
 
-                    elif pRequ == 5:            # Notify all
-                        self.chat_broadcast(1, "SERVER", pData)
+                    elif pRequ == 5:            # Notify all, nickname's headset has been muted
+                        self.chat_broadcast(1, "SERVER", nickname + " just muted headset.")
 
-                    elif pRequ == 6:            # Notify all, except sender
-                        self.chat_broadcast(1, "SERVER", pData, connection)
+                    elif pRequ == 6:            # Notify all, nickname's headset has been unmuted
+                        self.chat_broadcast(1, "SERVER", nickname + " just unmuted headset.")
 
 
             except Exception as e:

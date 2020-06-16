@@ -255,7 +255,13 @@ class chat_client():
 
     def command_handler(self, string):
         """ Handler for commands. """
-        if string.startswith("!setNickname "):
+        if string == "!c" or string == "!clear":
+            self.messages.clear()
+            self.lineQueue.clear()
+            self.update()
+            return True
+
+        elif string.startswith("!setNickname "):
             string = string.replace("!setNickname ", "")
             self.send(1, string)
             return True
@@ -287,19 +293,19 @@ class chat_client():
         elif string == "!unmute mic":
             if self.voiceMicMuted == True and self.voiceActive:
                 self.voiceMicMuted = False
-                self.send(3, "just unmuted mic.")
+                self.send(4, "just unmuted mic.")
             return True
 
         elif string == "!mute headset":
             if self.voiceHeadsetMuted == False and self.voiceActive:
                 self.voiceHeadsetMuted = True
-                self.send(3, "just muted headset.")
+                self.send(5, "just muted headset.")
             return True
 
         elif string == "!unmute headset":
             if self.voiceHeadsetMuted == True and self.voiceActive:
                 self.voiceHeadsetMuted = False
-                self.send(3, "just unmuted headset.")
+                self.send(6, "just unmuted headset.")
             return True
 
         return False
