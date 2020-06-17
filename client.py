@@ -353,14 +353,22 @@ class chat_client():
         for index, line in enumerate(displayText):
             self.screen.addstr(index, 0, line[0], line[1])
 
+        for column in range(0, self.lineWidth + 3):
+            self.screen.addstr(self.screenHeight-2, column, "═")
+
 
     def update_infobox(self):
         """ Update the infobox that displays the online users. """
-        self.screen.addstr(0, self.infoboxStartPos, " Online users:")
+        self.screen.addstr(0, self.infoboxStartPos + 1, " Online users:")
 
         for index, user in enumerate(self.onlineUsers):
-            self.screen.addstr(index + 1, self.infoboxStartPos, " " + user[:self.infoboxWidth - 1])
+            self.screen.addstr(index + 1, self.infoboxStartPos, "  - " + user[:self.infoboxWidth - 4])
 
+        for line in range(0, self.textboxHeight + 1):
+            if line == self.textboxHeight:
+                self.screen.addstr(line, self.infoboxStartPos, "╩")
+            else:
+                self.screen.addstr(line, self.infoboxStartPos, "║")
 
 
     def update_inputbox(self):
