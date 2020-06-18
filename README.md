@@ -4,7 +4,6 @@ A simple command line chat
 
 ## TODO
 
-- Password for server, a function before clientThread? Set the password for server in the beginning
 - emoji functions? !smile !wink different...
 - Keep log of conversations? on client?
 - Make it possible to disconnect and connect, setPort, setIP etc...

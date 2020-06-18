@@ -56,6 +56,8 @@ class chat_client():
         self.clientChat = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.clientChat.connect((self.host, self.portChat))
         self.chatActive = True
+        self.passwordOk = False
+        self.passwordString = ""
 
         # Curses display items
         self.inputString = ""
@@ -94,6 +96,7 @@ class chat_client():
 
     def run(self):
         """ The main function call. """
+        self.append_notification("SERVER", "Please enter the correct password to enter ChatApp", self.get_time(), curses.color_pair(self.colors["yellow"]))
         self.update()
 
         start_new_thread(self.__chat_thread, ())
@@ -152,10 +155,15 @@ class chat_client():
                 self.cursorPos = len(self.inputString)
 
             elif char == "\n":                  # ENTER KEY
-                if self.inputString != "":
-                    if not self.command_handler(self.inputString):
-                        self.append_message("You", self.inputString, self.get_time(), curses.color_pair(self.colors["white"]))
-                        self.send(0, self.inputString)
+                if self.passwordOk:
+                    if self.inputString != "":
+                        if not self.command_handler(self.inputString):
+                            self.append_message("You", self.inputString, self.get_time(), curses.color_pair(self.colors["white"]))
+                            self.send(0, self.inputString)
+                else:
+                    self.clientChat.send(self.passwordString.encode())
+                    self.passwordString = ""
+
                 self.inputString = ""
                 self.scrollIndex = 0
                 self.visualCursorPos = 0
@@ -189,7 +197,12 @@ class chat_client():
                     self.scrollIndex = 0
 
             else:                               # Append characters to self.inputString
-                self.inputString = self.inputString[:self.cursorPos] + str(char) + self.inputString[self.cursorPos:]
+                if self.passwordOk:
+                    self.inputString = self.inputString[:self.cursorPos] + str(char) + self.inputString[self.cursorPos:]
+                else:
+                    self.passwordString = self.passwordString[:self.cursorPos] + str(char) + self.passwordString[self.cursorPos:]
+                    self.inputString = self.inputString[:self.cursorPos] + "*" + self.inputString[self.cursorPos:]
+
                 if self.visualCursorPos != self.lineWidth:
                     self.visualCursorPos += 1
                 self.cursorPos += 1
@@ -224,10 +237,20 @@ class chat_client():
                             self.messages.append([line, curses.color_pair(self.colors["yellow"])])
                             self.lineQueue.append([line, curses.color_pair(self.colors["yellow"])])
                         self.update()
+
                     elif pType == 3:            # Update online users
                         self.onlineUsers = []
                         for user in pData:
                             self.onlineUsers.append(user)
+                        self.update()
+
+                    elif pType == 4:            # Password check
+                        if "Correct" in pData:
+                            self.append_notification(pFrom, pData, self.get_time(), curses.color_pair(self.colors["green"]))
+                            self.passwordOk = True
+                        else:
+                            self.append_notification(pFrom, pData, self.get_time(), curses.color_pair(self.colors["red"]))
+
                         self.update()
 
             except Exception as e:

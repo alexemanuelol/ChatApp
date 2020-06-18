@@ -44,6 +44,9 @@ class chat_server():
         self.clientsChat = []
         self.clientsVoice = []
 
+        # Password
+        self.password = str(self.config["General"]["password"])
+
 
     def run(self):
         """ The main function call. """
@@ -82,28 +85,36 @@ class chat_server():
     def __wait_incoming_chat_request(self):
         """ Constantly wait for a incoming socket connect request for chat. """
         while True:
-            try:
-                # Wait for incoming connection request
-                connection, address = self.socketChat.accept()
+            # Wait for incoming connection request
+            connection, address = self.socketChat.accept()
 
-                # Set initial nickname
-                self.set_nickname(address[0])
-
-                print(self.get_nickname(address[0]) + " connected!")
-
-                # Append connection to clientsChat
-                self.clientsChat.append((connection, address))
-                self.chat_send(1, "SERVER", "Welcome to ChatApp!", connection)
-
-                # Start chat thread
-                start_new_thread(self.__chat_thread, (connection, address))
-
-            except Exception as e:
-                print(repr(e))
-                break
+            start_new_thread(self.__init_new_user, (connection, address))
 
         connection.close()
         self.socketChat.close()
+
+
+    def __init_new_user(self, connection, address):
+        """ Setup a new user. """
+        try:
+            # Set initial nickname
+            self.set_nickname(address[0])
+
+            # Password check
+            print(self.get_nickname(address[0]) + " just entered password mode.")
+            if not self.password_check(connection):
+                return
+
+            print(self.get_nickname(address[0]) + " connected!")
+
+            # Append connection to clientsChat
+            self.clientsChat.append((connection, address))
+            self.chat_send(1, "SERVER", "Welcome to ChatApp!", connection)
+
+            # Start chat thread
+            start_new_thread(self.__chat_thread, (connection, address))
+        except Exception as e:
+            print(repr(e))
 
 
     def __voice_thread(self, connection, address):
@@ -235,6 +246,22 @@ class chat_server():
                 self.send_update_online_users()
             except:
                 pass
+
+
+    def password_check(self, connection):
+        """ Security before entering the chat. """
+        while True:
+            try:
+                received = connection.recv(1024).decode()
+                if received != None and received != "":
+                    if received == self.password:
+                        connection.send(pickle.dumps([4, "SERVER", "Correct password."]))
+                        return True
+                    else:
+                        connection.send(pickle.dumps([4, "SERVER", "Invalid password, please try again."]))
+            except:
+                connection.close()
+                return False
 
 
     def write_config(self):
