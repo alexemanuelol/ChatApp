@@ -42,11 +42,12 @@ class chat_client():
         for color, value in self.colors.items():
             curses.init_pair(value, value - 1, -1)
 
-        self.infoboxWidth = 20
+        self.INFOBOX_WIDTH = 20
+        self.MIN_TEXTBOX_WIDTH = 10
+        self.MIN_TEXTBOX_HEIGHT = 5
+
         self.update_screen_size()
 
-        self.MIN_WIDTH = self.infoboxWidth + 5
-        self.MIN_HEIGHT = 5
 
         # Socket initialization
         self.host = host
@@ -138,8 +139,6 @@ class chat_client():
             elif char == curses.KEY_RESIZE:     # RESIZE EVENT
                 self.cursorPos = 0
                 self.visualCursorPos = 0
-                self.update_screen_size()
-                self.update_message_formatting()
 
             elif char == 262:                   # HOME KEY
                 self.visualCursorPos = 0
@@ -195,8 +194,7 @@ class chat_client():
                     self.visualCursorPos += 1
                 self.cursorPos += 1
 
-            if self.screenWidth >= self.MIN_WIDTH and self.screenWidth >= self.MIN_HEIGHT:
-                self.update()
+            self.update()
 
 
     def __chat_thread(self):
@@ -324,12 +322,14 @@ class chat_client():
 
     def update(self):
         """ Update all. """
-        self.screen.clear()
         self.update_screen_size()
-        self.update_textbox()
-        self.update_infobox()
-        self.update_inputbox()
-        self.update_visual_cursor()
+        if self.textboxWidth >= self.MIN_TEXTBOX_WIDTH and self.textboxHeight >= self.MIN_TEXTBOX_HEIGHT:
+            self.update_message_formatting()
+            self.screen.clear()
+            self.update_textbox()
+            self.update_infobox()
+            self.update_inputbox()
+            self.update_visual_cursor()
         self.update_refresh()
 
 
@@ -337,7 +337,7 @@ class chat_client():
         """ Update the screen size. """
         self.screenHeight, self.screenWidth = self.screen.getmaxyx()
         self.textboxHeight = self.screenHeight - 2
-        self.textboxWidth = self.screenWidth - self.infoboxWidth
+        self.textboxWidth = self.screenWidth - self.INFOBOX_WIDTH
         self.infoboxStartPos = self.textboxWidth
         self.lineWidth = self.screenWidth - 3
 
@@ -362,7 +362,7 @@ class chat_client():
         self.screen.addstr(0, self.infoboxStartPos + 1, " Online users:")
 
         for index, user in enumerate(self.onlineUsers):
-            self.screen.addstr(index + 1, self.infoboxStartPos, "  - " + user[:self.infoboxWidth - 4])
+            self.screen.addstr(index + 1, self.infoboxStartPos, "  - " + user[:self.INFOBOX_WIDTH - 4])
 
         for line in range(0, self.textboxHeight + 1):
             if line == self.textboxHeight:
@@ -398,7 +398,7 @@ class chat_client():
         """ Update messages dependent on screen width. """
         self.lineQueue = []
         for message, color in self.messages:
-            lines = wrap(message, self.infoboxWidth)
+            lines = wrap(message, self.textboxWidth)
             for line in lines:
                 self.lineQueue.append([line, color])
 
@@ -409,7 +409,7 @@ class chat_client():
 
         self.messages.append([first_line, curses.color_pair(self.colors["white"]) | curses.A_STANDOUT])
         self.messages.append([message, color])
-        lines = wrap(message, self.textboxWidth)
+        lines = wrap(message, self.textboxWidth if self.textboxWidth >= self.MIN_TEXTBOX_WIDTH else self.MIN_TEXTBOX_WIDTH)
         self.lineQueue.append([first_line, curses.color_pair(self.colors["white"]) | curses.A_STANDOUT])
 
         if self.scrollIndex != 0:
