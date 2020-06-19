@@ -5,7 +5,6 @@ A simple command line chat
 ## TODO
 
 - emoji functions? !smile !wink different...
-- Keep log of conversations? on client?
 - Make it possible to disconnect and connect, setPort, setIP etc...
 - encrypt messages
 - Set input mic
@@ -13,6 +12,8 @@ A simple command line chat
 - Add V M H to infobox with either color green or red depending on if it's on or off. V = voice, M = mic, H = headset
 - Sound notification
 - paste from clipboard
+- pimp server interface
+
 
 
 
