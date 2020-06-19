@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import ast
 import curses
 import datetime
 import os
@@ -12,6 +13,7 @@ import sys
 import time
 
 from _thread import *
+from pathlib import Path
 from textwrap import wrap
 
 
@@ -93,10 +95,18 @@ class chat_client():
         self.voiceMicMuted = False
         self.voiceHeadsetMuted = False
 
+        # Create the Logs folder if it doesn't exist
+        Path("Logs").mkdir(parents = True, exist_ok = True)
+
+        # Get the chat log
+        if os.path.exists("Logs/chatLog.txt"):
+            self.read_chat_log()
+            self.update()
+
 
     def run(self):
         """ The main function call. """
-        self.append_notification("SERVER", "Please enter the correct password to enter ChatApp", self.get_time(), curses.color_pair(self.colors["yellow"]))
+        self.append_notification("SERVER", "Please enter the correct password to enter ChatApp", self.get_time(), "yellow")
         self.update()
 
         start_new_thread(self.__chat_thread, ())
@@ -158,7 +168,7 @@ class chat_client():
                 if self.passwordOk:
                     if self.inputString != "":
                         if not self.command_handler(self.inputString):
-                            self.append_message("You", self.inputString, self.get_time(), curses.color_pair(self.colors["white"]))
+                            self.append_message("You", self.inputString, self.get_time(), "white")
                             self.send(0, self.inputString)
                 else:
                     self.clientChat.send(self.passwordString.encode())
@@ -223,11 +233,11 @@ class chat_client():
                     pData = package[2]
 
                     if pType == 0:              # Forward type
-                        self.append_message(pFrom, pData, self.get_time(), curses.color_pair(self.colors["green"]))
+                        self.append_message(pFrom, pData, self.get_time(), "green")
                         self.update()
 
                     elif pType == 1:            # Notification type
-                        self.append_notification(pFrom, pData, self.get_time(), curses.color_pair(self.colors["yellow"]))
+                        self.append_notification(pFrom, pData, self.get_time(), "yellow")
                         self.update()
 
                     elif pType == 2:            # Users online
@@ -246,10 +256,10 @@ class chat_client():
 
                     elif pType == 4:            # Password check
                         if "Correct" in pData:
-                            self.append_notification(pFrom, pData, self.get_time(), curses.color_pair(self.colors["green"]))
+                            self.append_notification(pFrom, pData, self.get_time(), "green")
                             self.passwordOk = True
                         else:
-                            self.append_notification(pFrom, pData, self.get_time(), curses.color_pair(self.colors["red"]))
+                            self.append_notification(pFrom, pData, self.get_time(), "red")
 
                         self.update()
 
@@ -431,7 +441,11 @@ class chat_client():
         first_line = time + " " + "< " + sender + " >"
 
         self.messages.append([first_line, curses.color_pair(self.colors["white"]) | curses.A_STANDOUT])
-        self.messages.append([message, color])
+        self.write_to_chat_log(first_line, "white", "STANDOUT")
+
+        self.messages.append([message, curses.color_pair(self.colors[color])])
+        self.write_to_chat_log(message, color)
+
         lines = wrap(message, self.textboxWidth if self.textboxWidth >= self.MIN_TEXTBOX_WIDTH else self.MIN_TEXTBOX_WIDTH)
         self.lineQueue.append([first_line, curses.color_pair(self.colors["white"]) | curses.A_STANDOUT])
 
@@ -441,7 +455,7 @@ class chat_client():
         for line in lines:
             if self.scrollIndex != 0:
                 self.scrollIndex -= 1
-            self.lineQueue.append([line, color])
+            self.lineQueue.append([line, curses.color_pair(self.colors[color])])
 
 
     def append_notification(self, sender, notification, time, color):
@@ -451,8 +465,38 @@ class chat_client():
         if self.scrollIndex != 0:
             self.scrollIndex -= 1
 
-        self.messages.append([line, color])
-        self.lineQueue.append([line, color])
+        self.messages.append([line, curses.color_pair(self.colors[color])])
+        self.write_to_chat_log(line, color)
+        self.lineQueue.append([line, curses.color_pair(self.colors[color])])
+
+
+    def write_to_chat_log(self, line, color, attributes = "None"):
+        """"""
+        with open("Logs/chatLog.txt", "a+") as f:
+            f.write(str([line, color, attributes]) + "\n")
+
+
+    def read_chat_log(self):
+        """"""
+        newMessages = self.messages
+        chatLog = []
+
+        with open("Logs/chatLog.txt", "r") as f:
+            lines = f.readlines()
+
+        for line in lines:
+            try:
+                line = ast.literal_eval(line)
+                if line[2] == "None":
+                    chatLog.append([line[0], curses.color_pair(self.colors[line[1]])])
+                else:
+                    chatLog.append([line[0], curses.color_pair(self.colors[line[1]]) | curses.A_STANDOUT])
+            except:
+                return
+
+        self.messages = chatLog + newMessages
+        self.update_message_formatting()
+
 
 
     def get_time(self):
@@ -471,23 +515,3 @@ class chat_client():
 if __name__ == "__main__":
     client = chat_client("81.26.242.196", 60000, 60001)
     client.run()
-
-
-# Password code
-#print("Enter the password:")
-#string = ""
-#passwd = "Hejsan"
-#
-#while True:
-#    char = readchar.readkey()
-#
-#    if char == "\r":
-#        if string == passwd:
-#            print("Correct password!")
-#            break
-#        else:
-#            print("Incorrect password, try again...")
-#            string = ""
-#            continue
-#
-#    string += char
