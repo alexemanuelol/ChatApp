@@ -1,3 +1,4 @@
 windows-curses==2.1.0
 readchar==2.0.1
 PyAudio==0.2.11
+pyperclip==1.8.0

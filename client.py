@@ -6,6 +6,7 @@ import datetime
 import os
 import pickle
 import pyaudio
+import pyperclip
 import readchar
 import select
 import socket
@@ -15,6 +16,7 @@ import time
 from _thread import *
 from pathlib import Path
 from textwrap import wrap
+
 
 
 class chat_client():
@@ -28,6 +30,9 @@ class chat_client():
         curses.noecho()
         curses.start_color()
         curses.use_default_colors()
+
+        # Operating system
+        self.platform = sys.platform
 
         # Colors initialization
         self.colors = {
@@ -121,6 +126,7 @@ class chat_client():
         while True:
 
             char = self.screen.get_wch()
+            #self.append_message("Key-press", repr(char), "", "green")
 
             if char == "\x1b":                  # ESC KEY
                 self.exit()
@@ -181,6 +187,8 @@ class chat_client():
 
             elif char == 330:                   # DELETE KEY
                 self.inputString = self.inputString[:self.cursorPos] + self.inputString[self.cursorPos:][1:]
+                if not self.passwordOk:
+                    self.passwordString = self.passwordString[:self.cursorPos] + self.passwordString[self.cursorPos:][1:]
 
                 if len(self.inputString) >= self.lineWidth:
                     if len(self.inputString) == (self.visualRightPos - 1) and self.visualCursorPos != self.lineWidth:
@@ -188,6 +196,8 @@ class chat_client():
 
             elif char == "\x08" or char == 263: # BACKSPACE KEY
                 self.inputString = self.inputString[:self.cursorPos][:-1] + self.inputString[self.cursorPos:]
+                if not self.passwordOk:
+                    self.passwordString = self.passwordString[:self.cursorPos][:-1] + self.passwordString[self.cursorPos:]
 
                 if self.visualCursorPos != 0 and len(self.inputString) <= self.lineWidth and self.visualLeftPos == 0:
                     self.visualCursorPos -= 1
@@ -205,6 +215,20 @@ class chat_client():
                 self.scrollIndex += self.textboxHeight
                 if self.scrollIndex > 0:
                     self.scrollIndex = 0
+
+            elif char == "\x16":                # CTRL + V (paste)
+                try:
+                    if self.platform == "win32" or self.platform == "cygwin":
+                        copy = str(pyperclip.paste())
+                        self.inputString = self.inputString[:self.cursorPos] + copy + self.inputString[self.cursorPos:]
+                        self.cursorPos += len(copy)
+                        if (self.visualCursorPos + len(copy)) >= self.lineWidth:
+                            self.visualCursorPos = self.lineWidth
+                        else:
+                            self.visualCursorPos += len(copy)
+
+                except Exception as e:
+                    pass
 
             else:                               # Append characters to self.inputString
                 if self.passwordOk:
@@ -406,15 +430,18 @@ class chat_client():
 
     def update_inputbox(self):
         """ Update the inputbox with data from self.inputString. """
-        self.visualLeftPos = self.cursorPos - self.visualCursorPos
-        self.visualRightPos = self.visualLeftPos + self.lineWidth
+        try:
+            self.visualLeftPos = self.cursorPos - self.visualCursorPos
+            self.visualRightPos = self.visualLeftPos + self.lineWidth
 
-        displayString = ""
-        if len(self.inputString) >= self.lineWidth:
-            displayString = self.inputString[self.visualLeftPos:self.visualRightPos]
-        else:
-            displayString = self.inputString
-        self.screen.addstr(self.screenHeight-1, 0, "> " + displayString)
+            displayString = ""
+            if len(self.inputString) >= self.lineWidth:
+                displayString = self.inputString[self.visualLeftPos:self.visualRightPos]
+            else:
+                displayString = self.inputString
+            self.screen.addstr(self.screenHeight-1, 0, "> " + displayString)
+        except:
+            pass
 
 
     def update_visual_cursor(self):
