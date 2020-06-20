@@ -472,6 +472,8 @@ class chat_client():
 
     def write_to_chat_log(self, line, color, attributes = "None"):
         """"""
+        if not os.path.exists("Logs/"):
+            Path("Logs").mkdir(parents = True, exist_ok = True)
         with open("Logs/chatLog.txt", "a+") as f:
             f.write(str([line, color, attributes]) + "\n")
 
