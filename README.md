@@ -11,7 +11,6 @@ A simple command line chat
 - Set output speaker
 - Add V M H to infobox with either color green or red depending on if it's on or off. V = voice, M = mic, H = headset
 - Sound notification
-- paste from clipboard
 - pimp server interface
 
 
