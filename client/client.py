@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 import ast
 import curses
@@ -501,7 +502,7 @@ class chat_client():
         """"""
         if not os.path.exists("Logs/"):
             Path("Logs").mkdir(parents = True, exist_ok = True)
-        with open("Logs/chatLog.txt", "a+") as f:
+        with open("Logs/chatLog.txt", "a+", encoding="utf-8") as f:
             f.write(str([line, color, attributes]) + "\n")
 
 
@@ -510,7 +511,7 @@ class chat_client():
         newMessages = self.messages
         chatLog = []
 
-        with open("Logs/chatLog.txt", "r") as f:
+        with open("Logs/chatLog.txt", "r", encoding="utf-8") as f:
             lines = f.readlines()
 
         for line in lines:
