@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 import configparser
 import json
@@ -10,6 +11,7 @@ import sys
 import time
 
 from _thread import *
+from inspect import currentframe, getframeinfo
 
 class chat_server():
     """  """
@@ -38,7 +40,7 @@ class chat_server():
         self.socketVoice = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socketVoice.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socketVoice.bind(("", self.portVoice))
-        self.socketVoice.listen(self.MAX_USERS)
+        self.socketVoice.listen(self.MAX_USERS - 8)
 
         # Initialize lists to store active clients
         self.clientsChat = []
@@ -66,16 +68,21 @@ class chat_server():
                 # Wait for incoming connection request
                 connection, address = self.socketVoice.accept()
 
-                print(self.get_nickname(address[0]) + " joined voice chat.")
+                nickname = self.get_nickname(address[0])
 
-                # Append connection to clientsVoice
-                self.clientsVoice.append((connection, address))
+                if (connection, address) in self.clientsChat and nickname != False:
+                    print(nickname + " joined voice chat.")
 
-                # Start voice thread
-                start_new_thread(self.__voice_thread, (connection, address))
+                    # Append connection to clientsVoice
+                    self.clientsVoice.append((connection, address))
+
+                    # Start voice thread
+                    start_new_thread(self.__voice_thread, (connection, address))
+                else:
+                    connection.close()
 
             except Exception as e:
-                print(repr(e))
+                print("LINE: " + str(getframeinfo(currentframe()).lineno) + "EXCEPTION: " + '"' + str(e) + '"')
                 break
 
         connection.close()
@@ -114,7 +121,7 @@ class chat_server():
             # Start chat thread
             start_new_thread(self.__chat_thread, (connection, address))
         except Exception as e:
-            print(repr(e))
+            print("LINE: " + str(getframeinfo(currentframe()).lineno) + "EXCEPTION: " + '"' + str(e) + '"')
 
 
     def __voice_thread(self, connection, address):
@@ -127,7 +134,7 @@ class chat_server():
                 self.voice_broadcast(data, connection)
 
             except Exception as e:
-                #print(repr(e))
+                #print("LINE: " + str(getframeinfo(currentframe()).lineno) + "EXCEPTION: " + '"' + str(e) + '"')
                 self.remove_voice(connection, address)
                 break
 
@@ -185,7 +192,7 @@ class chat_server():
 
 
             except Exception as e:
-                #print(repr(e))
+                #print("LINE: " + str(getframeinfo(currentframe()).lineno) + "EXCEPTION: " + '"' + str(e) + '"')
                 self.remove_chat(connection, address)
                 break
 
