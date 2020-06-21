@@ -15,6 +15,7 @@ import sys
 import time
 
 from _thread import *
+from emojis import emojis
 from pathlib import Path
 from textwrap import wrap
 
@@ -175,6 +176,7 @@ class chat_client():
                 if self.passwordOk:
                     if self.inputString != "":
                         if not self.command_handler(self.inputString):
+                            self.inputString = self.replace_emojis(self.inputString)
                             self.append_message("You", self.inputString, self.get_time(), "white")
                             self.send(0, self.inputString)
                 else:
@@ -527,6 +529,13 @@ class chat_client():
         self.messages = chatLog + newMessages
         self.update_message_formatting()
 
+
+    def replace_emojis(self, string):
+        """ Append emojis to string. """
+        for key, value in emojis.items():
+            if key in string:
+                string = string.replace(key, emojis[key])
+        return string
 
 
     def get_time(self):
