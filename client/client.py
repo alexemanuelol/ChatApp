@@ -8,6 +8,7 @@ import os
 import pickle
 import pyaudio
 import pyperclip
+import re
 import readchar
 import select
 import socket
@@ -15,6 +16,7 @@ import sys
 import time
 
 from _thread import *
+from badwords import badwords
 from emojis import emojis
 from pathlib import Path
 from textwrap import wrap
@@ -177,6 +179,7 @@ class chat_client():
                     if self.inputString != "":
                         if not self.command_handler(self.inputString):
                             self.inputString = self.replace_emojis(self.inputString)
+                            self.inputString = self.replace_badwords(self.inputString)
                             self.append_message("You", self.inputString, self.get_time(), "white")
                             self.send(0, self.inputString)
                 else:
@@ -333,6 +336,7 @@ class chat_client():
         elif string.startswith("!setNickname "):
             string = string.replace("!setNickname ", "")
             string = self.replace_emojis(string)
+            string = self.replace_badwords(string)
             self.send(1, string)
             return True
 
@@ -537,6 +541,18 @@ class chat_client():
             if key in string:
                 string = string.replace(key, emojis[key])
         return string
+
+
+    def replace_badwords(self, string):
+        """ Replace bad words with ****. """
+        copy = string
+        stringLowercase = string.lower()
+        for word in badwords:
+            if word in stringLowercase:
+                replacement = len(word) * "*"
+                for match in re.finditer(word, stringLowercase):
+                    copy = copy[:match.start()] + replacement + copy[match.end():]
+        return copy
 
 
     def get_time(self):
