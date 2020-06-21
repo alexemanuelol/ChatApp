@@ -4,7 +4,6 @@ A simple command line chat
 
 ## TODO
 
-- emoji functions? !smile !wink different...
 - Make it possible to disconnect and connect, setPort, setIP etc...
 - encrypt messages
 - Set input mic
