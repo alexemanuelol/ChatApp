@@ -23,7 +23,7 @@ class chat_server():
 
         # Initialize config
         self.config = configparser.ConfigParser()
-        self.config.read("config.ini")
+        self.config.read("config.ini", encoding="utf-8")
 
         # Setup host ip and ports
         self.host = self.get_public_ip_address()
@@ -82,7 +82,7 @@ class chat_server():
                     connection.close()
 
             except Exception as e:
-                print("LINE: " + str(getframeinfo(currentframe()).lineno) + "EXCEPTION: " + '"' + str(e) + '"')
+                print("LINE: " + str(getframeinfo(currentframe()).lineno) + ", EXCEPTION: " + '"' + str(e) + '"')
                 break
 
         connection.close()
@@ -121,7 +121,7 @@ class chat_server():
             # Start chat thread
             start_new_thread(self.__chat_thread, (connection, address))
         except Exception as e:
-            print("LINE: " + str(getframeinfo(currentframe()).lineno) + "EXCEPTION: " + '"' + str(e) + '"')
+            print("LINE: " + str(getframeinfo(currentframe()).lineno) + ", EXCEPTION: " + '"' + str(e) + '"')
 
 
     def __voice_thread(self, connection, address):
@@ -134,7 +134,7 @@ class chat_server():
                 self.voice_broadcast(data, connection)
 
             except Exception as e:
-                #print("LINE: " + str(getframeinfo(currentframe()).lineno) + "EXCEPTION: " + '"' + str(e) + '"')
+                #print("LINE: " + str(getframeinfo(currentframe()).lineno) + ", EXCEPTION: " + '"' + str(e) + '"')
                 self.remove_voice(connection, address)
                 break
 
@@ -192,7 +192,7 @@ class chat_server():
 
 
             except Exception as e:
-                #print("LINE: " + str(getframeinfo(currentframe()).lineno) + "EXCEPTION: " + '"' + str(e) + '"')
+                print("LINE: " + str(getframeinfo(currentframe()).lineno) + ", EXCEPTION: " + '"' + str(e) + '"')
                 self.remove_chat(connection, address)
                 break
 
@@ -273,7 +273,7 @@ class chat_server():
 
     def write_config(self):
         """ Write to config file. """
-        with open("config.ini", "w") as configfile:
+        with open("config.ini", "w", encoding="utf-8") as configfile:
             self.config.write(configfile)
 
 
@@ -302,7 +302,7 @@ class chat_server():
         else:
             self.config["Users"][ip] = nickname
         self.write_config()
-        self.config.read("config.ini")
+        self.config.read("config.ini", encoding="utf-8")
 
 
     def send_update_online_users(self):

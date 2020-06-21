@@ -332,6 +332,7 @@ class chat_client():
 
         elif string.startswith("!setNickname "):
             string = string.replace("!setNickname ", "")
+            string = self.replace_emojis(string)
             self.send(1, string)
             return True
 
