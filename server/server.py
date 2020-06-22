@@ -70,7 +70,12 @@ class chat_server():
 
                 nickname = self.get_nickname(address[0])
 
-                if (connection, address) in self.clientsChat and nickname != False:
+                userOnline = False
+                for conn, add in self.clientsChat:
+                    if address[0] == add[0]:
+                        userOnline = True
+
+                if userOnline and nickname != False:
                     print(nickname + " joined voice chat.")
 
                     # Append connection to clientsVoice

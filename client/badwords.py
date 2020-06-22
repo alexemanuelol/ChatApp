@@ -588,7 +588,9 @@ badwords_sv = [
     "hora",
     "x betygsatt",
     "xxx",
-    "jävel"
+    "jävel",
+    "horunge",
+    "hor"
 ]
 
 badwords = badwords_en + badwords_sv

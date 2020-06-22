@@ -19,6 +19,7 @@ from _thread import *
 from badwords import badwords
 from emojis import emojis
 from pathlib import Path
+from playsound import playsound
 from textwrap import wrap
 
 
@@ -37,6 +38,9 @@ class chat_client():
 
         # Operating system
         self.platform = sys.platform
+        self.platform_linux = ["linux", "linux2"]
+        self.platform_windows = ["Windows", "win32", "cygwin"]
+        self.platform_mac = ["Mac", "darwin", "os2", "os2emx"]
 
         # Colors initialization
         self.colors = {
@@ -80,6 +84,10 @@ class chat_client():
         self.visualLeftPos = 0
         self.visualRightPos = 0
         self.onlineUsers = []
+
+        # Audio file paths
+        self.new_message_mp3 = "Sounds/new_message.mp3"
+        self.new_user_mp3 = "Sounds/new_user.mp3"
 
         # PyAudio
         chunkSize = 1024
@@ -224,7 +232,7 @@ class chat_client():
 
             elif char == "\x16":                # CTRL + V (paste)
                 try:
-                    if self.platform == "win32" or self.platform == "cygwin":
+                    if self.platform in self.platform_windows:
                         copy = str(pyperclip.paste())
                         self.inputString = self.inputString[:self.cursorPos] + copy + self.inputString[self.cursorPos:]
                         self.cursorPos += len(copy)
@@ -262,6 +270,8 @@ class chat_client():
                     pFrom = package[1]
                     pData = package[2]
 
+                    self.check_play_sound(pType, pFrom, pData)
+
                     if pType == 0:              # Forward type
                         self.append_message(pFrom, pData, self.get_time(), "green")
                         self.update()
@@ -290,7 +300,6 @@ class chat_client():
                             self.passwordOk = True
                         else:
                             self.append_notification(pFrom, pData, self.get_time(), "red")
-
                         self.update()
 
             except Exception as e:
@@ -318,6 +327,17 @@ class chat_client():
                     self.clientVoice.sendall(data)
             except:
                 pass
+
+
+    def check_play_sound(self, pType, pFrom, pData):
+        """ Check if sound should be played. """
+        if pType == 0:
+            active = self.get_active_window()
+            if "ChatApp" not in active:
+                playsound(self.new_message_mp3, False)
+        elif pType == 1:
+            if pFrom == "SERVER" and "just connected." in pData:
+                playsound(self.new_user_mp3, False)
 
 
     def send(self, pRequ, pData):
@@ -553,6 +573,63 @@ class chat_client():
                 for match in re.finditer(word, stringLowercase):
                     copy = copy[:match.start()] + replacement + copy[match.end():]
         return copy
+
+
+    def get_active_window(self):
+        """ Returns the name of the active window. """
+        active_window_name = None
+
+        if self.platform in self.platform_linux:
+            try:
+                import wnck
+                importOk = True
+            except ImportError:
+                importOk = False
+
+            if importOk:
+                screen = wnck.screen_get_default()
+                screen.force_update()
+                window = screen.get_active_window()
+                if window is not None:
+                    pid = window.get_pid()
+                    with open("/proc/{pid}/cmdline".format(pid=pid)) as f:
+                        active_window_name = f.read()
+            else:
+                try:
+                    from gi.repository import Gtk, Wnck
+                    importOk = True
+                except ImportError:
+                    importOk = False
+                if importOk:
+                    Gtk.init([])
+                    screen = Wnck.Screen.get_default()
+                    screen.force_update()
+                    active_window = screen.get_active_window()
+                    pid = active_window.get_pid()
+                    with open("/proc/{pid}/cmdline".format(pid=pid)) as f:
+                        active_window_name = f.read()
+
+        elif self.platform in self.platform_windows:
+            try:
+                import win32gui
+            except ImportError:
+                return False
+
+            window = win32gui.GetForegroundWindow()
+            active_window_name = win32gui.GetWindowText(window)
+
+        elif self.platform in self.platform_mac:
+            try:
+                from AppKit import NSWorkspace
+            except ImportError:
+                return False
+
+            active_window_name = (NSWorkspace.sharedWorkspace().activeApplication()['NSApplicationName'])
+
+        else:
+            return False
+
+        return active_window_name
 
 
     def get_time(self):
