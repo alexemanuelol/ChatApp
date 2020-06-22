@@ -11,6 +11,7 @@ A simple command line chat
 - Add V M H to infobox with either color green or red depending on if it's on or off. V = voice, M = mic, H = headset
 - Sound notification
 - pimp server interface
+- Replace pyperclip, .exe files becomes too large because of Qt libraries usage
 
 
 
