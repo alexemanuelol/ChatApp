@@ -7,7 +7,6 @@ import datetime
 import os
 import pickle
 import pyaudio
-import pyperclip
 import re
 import readchar
 import select
@@ -232,8 +231,8 @@ class chat_client():
 
             elif char == "\x16":                # CTRL + V (paste)
                 try:
-                    if self.platform in self.platform_windows:
-                        copy = str(pyperclip.paste())
+                    copy = self.get_clipboard()
+                    if copy != None and copy != False:
                         self.inputString = self.inputString[:self.cursorPos] + copy + self.inputString[self.cursorPos:]
                         self.cursorPos += len(copy)
                         if (self.visualCursorPos + len(copy)) >= self.lineWidth:
@@ -579,7 +578,16 @@ class chat_client():
         """ Returns the name of the active window. """
         active_window_name = None
 
-        if self.platform in self.platform_linux:
+        if self.platform in self.platform_windows:
+            try:
+                import win32gui
+            except ImportError:
+                return False
+
+            window = win32gui.GetForegroundWindow()
+            active_window_name = win32gui.GetWindowText(window)
+
+        elif self.platform in self.platform_linux:
             try:
                 import wnck
                 importOk = True
@@ -609,15 +617,6 @@ class chat_client():
                     with open("/proc/{pid}/cmdline".format(pid=pid)) as f:
                         active_window_name = f.read()
 
-        elif self.platform in self.platform_windows:
-            try:
-                import win32gui
-            except ImportError:
-                return False
-
-            window = win32gui.GetForegroundWindow()
-            active_window_name = win32gui.GetWindowText(window)
-
         elif self.platform in self.platform_mac:
             try:
                 from AppKit import NSWorkspace
@@ -630,6 +629,30 @@ class chat_client():
             return False
 
         return active_window_name
+
+
+    def get_clipboard(self):
+        """ Get system clipboard. """
+        clipboard = None
+
+        if self.platform in self.platform_windows:
+            try:
+                import win32clipboard
+            except ImportError:
+                return None
+
+            win32clipboard.OpenClipboard()
+            clipboard = win32clipboard.GetClipboardData()
+            win32clipboard.CloseClipboard()
+
+        elif self.platform in self.platform_linux:
+            pass
+        elif self.platform in self.platform_mac:
+            pass
+        else:
+            return False
+
+        return clipboard
 
 
     def get_time(self):
