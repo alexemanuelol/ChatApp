@@ -11,6 +11,7 @@ A simple command line chat
 - Add V M H to infobox with either color green or red depending on if it's on or off. V = voice, M = mic, H = headset
 - Sound notification
 - pimp server interface
+- move badwords and emoji handling to the server instead of client
 
 
 
