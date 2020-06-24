@@ -7,7 +7,6 @@ import datetime
 import os
 import pickle
 import pyaudio
-import re
 import readchar
 import select
 import socket
@@ -185,9 +184,6 @@ class chat_client():
                 if self.passwordOk:
                     if self.inputString != "":
                         if not self.command_handler(self.inputString):
-                            self.inputString = self.replace_emojis(self.inputString)
-                            self.inputString = self.replace_badwords(self.inputString)
-                            self.append_message("You", self.inputString, self.get_time(), "white")
                             self.send(0, self.inputString)
                 else:
                     self.clientChat.send(self.passwordString.encode())
@@ -301,6 +297,11 @@ class chat_client():
                             self.append_notification(pFrom, pData, self.get_time(), "red")
                         self.update()
 
+                    elif pType == 5:            # Returned checked inputString
+                        self.append_message("You", pData, self.get_time(), "white")
+                        self.update()
+
+
             except Exception as e:
                 #print(repr(e))
                 continue
@@ -354,8 +355,6 @@ class chat_client():
 
         elif string.startswith("!setNickname "):
             string = string.replace("!setNickname ", "")
-            string = self.replace_emojis(string)
-            string = self.replace_badwords(string)
             self.send(1, string)
             return True
 
@@ -552,26 +551,6 @@ class chat_client():
 
         self.messages = chatLog + newMessages
         self.update_message_formatting()
-
-
-    def replace_emojis(self, string):
-        """ Append emojis to string. """
-        for key, value in emojis.items():
-            if key in string:
-                string = string.replace(key, emojis[key])
-        return string
-
-
-    def replace_badwords(self, string):
-        """ Replace bad words with ****. """
-        copy = string
-        stringLowercase = string.lower()
-        for word in badwords:
-            if word in stringLowercase:
-                replacement = len(word) * "*"
-                for match in re.finditer(word, stringLowercase):
-                    copy = copy[:match.start()] + replacement + copy[match.end():]
-        return copy
 
 
     def get_active_window(self):

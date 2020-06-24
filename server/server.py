@@ -4,6 +4,7 @@
 import configparser
 import json
 import pickle
+import re
 import requests
 import select
 import socket
@@ -11,6 +12,8 @@ import sys
 import time
 
 from _thread import *
+from badwords import badwords
+from emojis import emojis
 from inspect import currentframe, getframeinfo
 
 class chat_server():
@@ -165,10 +168,15 @@ class chat_server():
 
                     if pRequ == 0:              # Forward message
                         print("< " + nickname + " > " + pData)
+                        pData = self.replace_emojis(pData)                  # Replace emojis
+                        pData = self.replace_badwords(pData)                # Replace badwords
+                        self.chat_send(5, "SERVER", pData, connection)
                         self.chat_broadcast(0, nickname, pData, connection)
 
                     elif pRequ == 1:            # Nickname change
                         oldNickname = self.get_nickname(address[0])
+                        pData = self.replace_emojis(pData)                  # Replace emojis
+                        pData = self.replace_badwords(pData)                # Replace badwords
                         self.set_nickname(address[0], pData)
                         nickname = self.get_nickname(address[0])
                         print("< SERVER > " + oldNickname + " changed nickname to " + nickname)
@@ -274,6 +282,26 @@ class chat_server():
             except:
                 connection.close()
                 return False
+
+
+    def replace_emojis(self, string):
+        """ Append emojis to string. """
+        for key, value in emojis.items():
+            if key in string:
+                string = string.replace(key, emojis[key])
+        return string
+
+
+    def replace_badwords(self, string):
+        """ Replace bad words with ****. """
+        copy = string
+        stringLowercase = string.lower()
+        for word in badwords:
+            if word in stringLowercase:
+                replacement = len(word) * "*"
+                for match in re.finditer(word, stringLowercase):
+                    copy = copy[:match.start()] + replacement + copy[match.end():]
+        return copy
 
 
     def write_config(self):
