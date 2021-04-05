@@ -14,8 +14,6 @@ import sys
 import time
 
 from _thread import *
-from badwords import badwords
-from emojis import emojis
 from pathlib import Path
 from playsound import playsound
 from textwrap import wrap
