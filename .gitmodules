@@ -1,0 +1,3 @@
+[submodule "src/terminal-text-boxes"]
+	path = src/terminal-text-boxes
+	url = https://github.com/alexemanuelol/terminal-text-boxes.git
