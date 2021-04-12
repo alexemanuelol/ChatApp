@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 emojis = {
     # Symbols
     "<3"        : "♥",
@@ -141,3 +144,14 @@ emojis = {
     ":$"        : "(#^_^#)",
     "=$"        : "(#^_^#)"
 }
+
+def translate_emojis(string):
+    """ Replace 'smilys' with emojis from the emoji dict.
+        Arguments:
+            string          - The string to translate.      (str)
+    """
+    for key, value in emojis.items():
+        if key in string:
+            string = string.replace(key, emojis[key])
+
+    return string

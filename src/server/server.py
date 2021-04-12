@@ -3,305 +3,275 @@
 
 import configparser
 import json
-import pickle
-import re
+import os
 import requests
-import select
 import socket
 import sys
+import threading
 import time
-
-from _thread import *
-from badwords import badwords
-from emojis import emojis
 from inspect import currentframe, getframeinfo
 
-class chat_server():
-    """  """
+from badwords import replace_badwords
+from emojis import translate_emojis
 
-    def __init__(self, portChat, portVoice):
-        """  """
-        # Constants
-        self.MAX_USERS = 10
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))) + "/common/")
 
+import pkg_type as pt
+
+
+class ChatAppServer():
+    """ ChatAppServer. """
+
+    def __init__(self, port):
+        """ Class initialization.
+            Arguments:
+                port                - The port of the socket.       (str)
+        """
         # Initialize config
         self.config = configparser.ConfigParser()
         self.config.read("config.ini", encoding="utf-8")
 
-        # Setup host ip and ports
+        # Setup host ip and ports for socket
         self.host = self.get_public_ip_address()
-        self.portChat = portChat
-        self.portVoice = portVoice
+        self.port = port
+        self.socket = None
 
-        # Socket Chat
-        self.socketChat = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socketChat.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.socketChat.bind(("", self.portChat))
-        self.socketChat.listen(self.MAX_USERS)
-
-        # Socket Voice
-        self.socketVoice = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socketVoice.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.socketVoice.bind(("", self.portVoice))
-        self.socketVoice.listen(self.MAX_USERS - 8)
-
-        # Initialize lists to store active clients
-        self.clientsChat = []
-        self.clientsVoice = []
-
-        # Password
+        # General variables
+        self.MAX_CLIENTS = 10
+        self.clients = list()
         self.password = str(self.config["General"]["password"])
 
 
-    def run(self):
-        """ The main function call. """
+    def start(self):
+        """ Start ChatApp server. """
+        # Initialize Chat Socket
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket.bind(("", self.port))
+        self.socket.listen(self.MAX_CLIENTS)
+
         print("Server hosted on:")
-        print("IP Address:   " + self.host)
-        print("port chat:    " + str(self.portChat))
-        print("port voice:   " + str(self.portVoice))
+        print(f"IP Address:  {self.host}")
+        print(f"port:        {str(self.port)}")
 
-        start_new_thread(self.__wait_incoming_voice_request, ())
-        self.__wait_incoming_chat_request()
-
-
-    def __wait_incoming_voice_request(self):
-        """ Constantly wait for a incoming socket connect request for voice. """
-        while True:
-            try:
-                # Wait for incoming connection request
-                connection, address = self.socketVoice.accept()
-
-                nickname = self.get_nickname(address[0])
-
-                userOnline = False
-                for conn, add in self.clientsChat:
-                    if address[0] == add[0]:
-                        userOnline = True
-
-                if userOnline and nickname != False:
-                    print(nickname + " joined voice chat.")
-
-                    # Append connection to clientsVoice
-                    self.clientsVoice.append((connection, address))
-
-                    # Start voice thread
-                    start_new_thread(self.__voice_thread, (connection, address))
-                else:
-                    connection.close()
-
-            except Exception as e:
-                print("LINE: " + str(getframeinfo(currentframe()).lineno) + ", EXCEPTION: " + '"' + str(e) + '"')
-                break
-
-        connection.close()
-        self.socketVoice.close()
+        # Start the wait incoming chat connections thread
+        self.__wait_incoming_connections()
 
 
-    def __wait_incoming_chat_request(self):
-        """ Constantly wait for a incoming socket connect request for chat. """
+    def stop(self):
+        """ Stop ChatApp server. """
+        self.socket.close()
+
+
+    def __wait_incoming_connections(self):
+        """ Constantly wait for a incoming connection requests. """
         while True:
             # Wait for incoming connection request
-            connection, address = self.socketChat.accept()
+            connection, address = self.socket.accept()
 
-            start_new_thread(self.__init_new_user, (connection, address))
+            event = threading.Event()
+            thread = threading.Thread(target=self.__init_new_client, args=(event, connection, address))
+            thread.start()
 
         connection.close()
-        self.socketChat.close()
+        self.stop()
 
 
-    def __init_new_user(self, connection, address):
-        """ Setup a new user. """
+    def __init_new_client(self, event, connection, address):
+        """ Setup a new user.
+            Arguments:
+                event               - Unused argument.          (threading.Event)
+                connection          - The client connection.    (connection)
+                address             - The client address        (address)
+        """
         try:
             # Set initial nickname
             self.set_nickname(address[0])
+            nickname = self.get_nickname(address[0])
 
-            # Password check
-            print(self.get_nickname(address[0]) + " just entered password mode.")
+            # Password check function
+            print(f"{nickname} just entered password mode.")
             if not self.password_check(connection):
                 return
 
-            print(self.get_nickname(address[0]) + " connected!")
+            print(f"{nickname} connected!")
 
             # Append connection to clientsChat
-            self.clientsChat.append((connection, address))
-            self.chat_send(1, "SERVER", "Welcome to ChatApp!", connection)
+            self.clients.append((connection, address))
+            self.send_package(pt.P_TYPE["notify"], "Welcome to ChatApp!", "chat_info", "SERVER", connection)
 
             # Start chat thread
-            start_new_thread(self.__chat_thread, (connection, address))
+            event = threading.Event()
+            thread = threading.Thread(target=self.__chat_thread, args=(event, connection, address))
+            thread.start()
         except Exception as e:
-            print("LINE: " + str(getframeinfo(currentframe()).lineno) + ", EXCEPTION: " + '"' + str(e) + '"')
+            lineNumber = str(getframeinfo(currentframe()).lineno)
+            print(f"EXCEPTION:\n    {str(e)}\n    LINE:  {lineNumber}")
 
 
-    def __voice_thread(self, connection, address):
-        """ Individual voice thread for clients. """
+    def __chat_thread(self, event, connection, address):
+        """ Individual chat thread for clients.
+            Arguments:
+                event               - Unused argument.          (threading.Event)
+                connection          - The client connection.    (connection)
+                address             - The client address        (address)
+        """
         nickname = self.get_nickname(address[0])
-        self.chat_broadcast(1, "SERVER", nickname + " just joined voice chat.")
-        while True:
-            try:
-                data = connection.recv(1024)
-                self.voice_broadcast(data, connection)
-
-            except Exception as e:
-                #print("LINE: " + str(getframeinfo(currentframe()).lineno) + ", EXCEPTION: " + '"' + str(e) + '"')
-                self.remove_voice(connection, address)
-                break
-
-
-    def __chat_thread(self, connection, address):
-        """ Individual chat thread for clients. """
-        nickname = self.get_nickname(address[0])
-        time.sleep(.5)
         self.send_update_online_users()
-        self.chat_broadcast(1, "SERVER", nickname + " just connected.", connection)
-
+        self.broadcast_package(pt.P_TYPE["notify"], f"{nickname} just connected.", "chat_info", "SERVER", connection)
 
         while True:
             try:
-                received = connection.recv(2048)
+                recv = connection.recv(2048)
+                pkg = json.loads(recv.decode("utf-8"))
 
-                package = pickle.loads(received)
-                print("Incoming package from < " + nickname + " >: " + str(package))
+                if not pt.valid_package(pkg, False):
+                    print(f"INVALID PACKAGE: {str(pkg)}")
+                    continue
 
-                if len(package) == 2:
-                    pRequ = package[0]      # Request
-                    pData = package[1]      # Data
+                print(f"Incoming package from < {nickname} >: {str(pkg)}")
 
-                    if pRequ == 0:              # Forward message
-                        print("< " + nickname + " > " + pData)
-                        pData = self.replace_emojis(pData)                  # Replace emojis
-                        pData = self.replace_badwords(pData)                # Replace badwords
-                        self.chat_send(5, "SERVER", pData, connection)
-                        self.chat_broadcast(0, nickname, pData, connection)
-
-                    elif pRequ == 1:            # Nickname change
+                if pkg["type"] == pt.P_TYPE["command"]:
+                    if pkg["info"] == "stop":
+                        connection.close()
+                        self.remove_client(connection, address)
+                        break
+                    elif pkg["info"] == "setNickname":
                         oldNickname = self.get_nickname(address[0])
-                        pData = self.replace_emojis(pData)                  # Replace emojis
-                        pData = self.replace_badwords(pData)                # Replace badwords
-                        self.set_nickname(address[0], pData)
+                        data = pkg["data"]
+                        data = translate_emojis(data)           # Replace emojis
+                        data = replace_badwords(data)      # Replace badwords
+                        self.set_nickname(address[0], data)
                         nickname = self.get_nickname(address[0])
-                        print("< SERVER > " + oldNickname + " changed nickname to " + nickname)
-                        self.chat_broadcast(1, "SERVER", oldNickname + " changed nickname to " + nickname)
+                        text = f"< SERVER > {oldNickname} changed nickname to {nickname}"
+                        print(text)
+                        self.broadcast_package(pt.P_TYPE["notify"], text, "chat_info", "SERVER")
                         self.send_update_online_users()
 
-                    elif pRequ == 2:            # Users online
-                        users = self.get_users(connection)
-                        self.chat_send(2, None, users, connection)
+                elif pkg["type"] == pt.P_TYPE["message"]:
+                    print(f"< {nickname} > {pkg['data']}")
+                    data = pkg["data"]
+                    data = translate_emojis(data)           # Replace emojis
+                    data = replace_badwords(data)      # Replace badwords
+                    self.broadcast_package(pt.P_TYPE["message"], data, None, nickname)
 
-                    elif pRequ == 3:            # Notify all, nickname's mic has been muted
-                        self.chat_broadcast(1, "SERVER", nickname + " just muted mic.")
-                        self.send_update_online_users()
+                elif pkg["type"] == pt.P_TYPE["notify"]:
+                    pass
 
-                    elif pRequ == 4:            # Notify all, nickname's mic has been unmuted
-                        self.chat_broadcast(1, "SERVER", nickname + " just unmuted mic.")
-                        self.send_update_online_users()
-
-                    elif pRequ == 5:            # Notify all, nickname's headset has been mute
-                        self.chat_broadcast(1, "SERVER", nickname + " just muted headset.")
-                        self.send_update_online_users()
-
-                    elif pRequ == 6:            # Notify all, nickname's headset has been unmuted
-                        self.chat_broadcast(1, "SERVER", nickname + " just unmuted headset.")
-                        self.send_update_online_users()
-
+                elif pkg["type"] == pt.P_TYPE["error"]:
+                    pass
 
             except Exception as e:
-                print("LINE: " + str(getframeinfo(currentframe()).lineno) + ", EXCEPTION: " + '"' + str(e) + '"')
-                self.remove_chat(connection, address)
+                lineNumber = str(getframeinfo(currentframe()).lineno)
+                print(f"EXCEPTION:\n    {str(e)}\n    LINE:  {lineNumber}")
+                connection.close()
+                self.remove_client(connection, address)
                 break
 
 
-    def voice_broadcast(self, data, ignored = None):
-        """ Broadcasts the voice to all other clients. """
-        for (connection, address) in self.clientsVoice:
-            if connection != ignored:
+    def broadcast_package(self, pType, pData, pInfo, pInitiator, ignore=None):
+        """ Broadcast a package to clients.
+            Arguments:
+                pType               - The type of package.                  (int)
+                pData               - The data of the package.              (any)
+                pInfo               - Additional info about the package     (any)
+                pInitiator          - The initiator of the package.         (str)
+                ignore              - Connection to be ignored.             (connection)
+        """
+        package = pt.create_package(pType, pData, pInfo, pInitiator)
+
+        for (connection, address) in self.clients:
+            if connection != ignore:
                 try:
-                    connection.send(data)
+                    connection.send(package)
                 except:
                     connection.close()
-                    self.remove_voice(connection, address)
+                    self.remove_client(connection, address)
 
 
-    def chat_broadcast(self, pType, pFrom, pData, ignored = None):
-        """ Broadcasts the message to all other clients. """
-        for (connection, address) in self.clientsChat:
-            if connection != ignored:
+    def send_package(self, pType, pData, pInfo, pInitiator, to):
+        """ Send a package to a specific client.
+            Arguments:
+                pType               - The type of package.                  (int)
+                pData               - The data of the package.              (any)
+                pInfo               - Additional info about the package     (any)
+                pInitiator          - The initiator of the package.         (str)
+                to                  - The client connection to send to.     (connection)
+        """
+        package = pt.create_package(pType, pData, pInfo, pInitiator)
+
+        for (connection, address) in self.clients:
+            if connection == to:
                 try:
-                    connection.send(pickle.dumps([pType, pFrom, pData]))
+                    connection.send(package)
                 except:
                     connection.close()
-                    self.remove_chat(connection, address)
+                    self.remove_client(connection, address)
+                return
 
 
-    def chat_send(self, pType, pFrom, pData, pTo):
-        """ Send a message to a specified receiver. """
-        for (connection, address) in self.clientsChat:
-            if connection == pTo:
-                try:
-                    connection.send(pickle.dumps([pType, pFrom, pData]))
-                except:
-                    connection.close()
-                    self.remove_chat(connection, address)
-
-
-    def remove_voice(self, connection, address):
-        """ Remove the connection from clientsVoice list. """
-        if (connection, address) in self.clientsVoice:
+    def remove_client(self, connection, address):
+        """ Remove the connection from clients list.
+            Arguments:
+                connection          - The client connection.    (connection)
+                address             - The client address        (address)
+        """
+        if (connection, address) in self.clients:
             nickname = self.get_nickname(address[0])
-            print(nickname + " just left voice chat.")
-            self.chat_broadcast(1, "SERVER", nickname + " just left voice chat.")
+            text = f"{nickname} just disconnected."
+            print(text)
+            self.broadcast_package(pt.P_TYPE["notify"], text, "chat_info", "SERVER", connection)
             try:
-                self.clientsVoice.remove((connection, address))
-            except:
-                pass
-
-
-    def remove_chat(self, connection, address):
-        """ Remove the connection from clientsChat list. """
-        if (connection, address) in self.clientsChat:
-            nickname = self.get_nickname(address[0])
-            print(nickname + " just disconnected.")
-            self.chat_broadcast(1, "SERVER", nickname + " just disconnected.", connection)
-            try:
-                self.clientsChat.remove((connection, address))
+                self.clients.remove((connection, address))
                 self.send_update_online_users()
             except:
                 pass
 
 
     def password_check(self, connection):
-        """ Security before entering the chat. """
+        """ Continous loop that check incoming data for correct password.
+            Arguments:
+                connection          - The client connection.    (connection)
+        """
         while True:
             try:
-                received = connection.recv(1024).decode()
-                if received != None and received != "":
-                    if received == self.password:
-                        connection.send(pickle.dumps([4, "SERVER", "Correct password."]))
+                recv = connection.recv(2048).decode()
+                if recv != None and recv != "":
+                    if recv == self.password:
+                        package = pt.create_package(pt.P_TYPE["command"], "Correct password", "password", None)
+                        connection.send(package)
+                        time.sleep(.5) # Needed so that package gets sent
                         return True
                     else:
-                        connection.send(pickle.dumps([4, "SERVER", "Invalid password, please try again."]))
+                        package = pt.create_package(pt.P_TYPE["command"], "Invalid password", "password", None)
+                        connection.send(package)
             except:
                 connection.close()
                 return False
 
 
-    def replace_emojis(self, string):
-        """ Append emojis to string. """
-        for key, value in emojis.items():
-            if key in string:
-                string = string.replace(key, emojis[key])
-        return string
+    def send_update_online_users(self):
+        """ Update all clients about online users. """
+        users = self.get_users()
+        self.broadcast_package(pt.P_TYPE["command"], users, "updateUsers", "SERVER")
 
 
-    def replace_badwords(self, string):
-        """ Replace bad words with ****. """
-        copy = string
-        stringLowercase = string.lower()
-        for word in badwords:
-            if word in stringLowercase:
-                replacement = len(word) * "*"
-                for match in re.finditer(word, stringLowercase):
-                    copy = copy[:match.start()] + replacement + copy[match.end():]
-        return copy
+    def get_users(self):
+        """ Returns a list of all connected users. """
+        users = []
+        for (connection, address) in self.clients:
+            users.append(self.get_nickname(address[0]))
+        return users
+
+
+    def get_public_ip_address(self):
+        """ Send a request to ipinfo.io to retreive public ip address. """
+        response = requests.get("https://ipinfo.io/json", verify = True)
+        if response.status_code != 200:
+            print(f"Status: {resplose.status_code}. Problem with the request.")
+            return None
+        data = response.json()
+        return data["ip"]
 
 
     def write_config(self):
@@ -310,25 +280,22 @@ class chat_server():
             self.config.write(configfile)
 
 
-    def get_public_ip_address(self):
-        """ Send a request to ipinfo.io to retreive public ip address. """
-        response = requests.get("https://ipinfo.io/json", verify = True)
-        if response.status_code != 200:
-            print("Status: " + response.status_code + ". Problem with the request. Exiting")
-            exit()
-        data = response.json()
-        return data["ip"]
-
-
     def get_nickname(self, ip):
-        """ Get the nickname associated with the ip. """
+        """ Get the nickname of a specific client ip.
+            Arguments:
+                ip              - The ip address to check in the config.ini file.       (str)
+        """
         if self.config.has_option("Users", ip):
             return self.config["Users"][ip]
         return False
 
 
-    def set_nickname(self, ip, nickname = None):
-        """ Set a nickname for a specific ip. """
+    def set_nickname(self, ip, nickname=None):
+        """ Set the nickname of a specific client ip.
+            Arguments:
+                ip              - The client ip.            (str)
+                nickname        - The nickname to be set.   (str)
+        """
         if nickname == None:
             if not self.config.has_option("Users", ip):
                 self.config["Users"][ip] = ip
@@ -338,23 +305,9 @@ class chat_server():
         self.config.read("config.ini", encoding="utf-8")
 
 
-    def send_update_online_users(self):
-        """ Update all clients about online users. """
-        users = self.get_users()
-        self.chat_broadcast(3, None, users)
-
-
-
-    def get_users(self, ignored = None):
-        """ Returns a list of all connected users. """
-        users = []
-        for (connection, address) in self.clientsChat:
-            if connection != ignored:
-                users.append(self.get_nickname(address[0]))
-        return users
-
 
 
 if __name__ == "__main__":
-    cs = chat_server(60000, 60001)
-    cs.run()
+    port = 60000
+    cas = ChatAppServer(port)
+    cas.start()

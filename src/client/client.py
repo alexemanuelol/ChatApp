@@ -1,650 +1,259 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import ast
-import curses
 import datetime
+import json
 import os
-import pickle
-import pyaudio
-import readchar
-import select
 import socket
 import sys
-import time
+import threading
 
-from _thread import *
-from pathlib import Path
-from playsound import playsound
-from textwrap import wrap
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))) + "/terminal-text-boxes/src/")
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))) + "/common/")
 
-
-
-class chat_client():
-    """  """
-
-    def __init__(self, host, portChat, portVoice):
-        """ Class initialization. """
-        # Curses initialization
-        self.screen = curses.initscr()
-        self.screen.keypad(True)
-        curses.noecho()
-        curses.start_color()
-        curses.use_default_colors()
-
-        # Operating system
-        self.platform = sys.platform
-        self.platform_linux = ["linux", "linux2"]
-        self.platform_windows = ["Windows", "win32", "cygwin"]
-        self.platform_mac = ["Mac", "darwin", "os2", "os2emx"]
-
-        # Colors initialization
-        self.colors = {
-            "black" : 1,
-            "blue" : 2,
-            "green" : 3,
-            "cyan" : 4,
-            "red" : 5,
-            "magenta" : 6,
-            "yellow" : 7,
-            "white" : 8,
-        }
-
-        for color, value in self.colors.items():
-            curses.init_pair(value, value - 1, -1)
-
-        self.INFOBOX_WIDTH = 20
-        self.MIN_TEXTBOX_WIDTH = 10
-        self.MIN_TEXTBOX_HEIGHT = 5
-
-        self.update_screen_size()
+import terminalTextBoxes as ttb
+import unicode as uni
+import pkg_type as pt
 
 
-        # Socket initialization
+class ChatAppClient():
+    """ ChatAppClient. """
+
+    def __init__(self, host, port):
+        """ Class initialization.
+            Arguments:
+                host                - The host IP to connect to.    (str)
+                port                - The port of the server.       (int)
+        """
+        # Initialize terminalTextBoxes
+        self.tb = ttb.TerminalTextBoxes(self.character_callback, self.enter_callback)
+        self.tb.create_text_box_setup("main")
+        self.tb.create_text_box("main", "chat", hOrient=ttb.H_ORIENT["left"], wTextIndent=1, frameAttr="green",
+                                frameChar="doubleLine")
+        self.tb.create_text_box("main", "info", 25, hOrient=ttb.H_ORIENT["right"], wTextIndent=1, frameAttr="yellow",
+                                frameChar="doubleLine", scrollVisable=False)
+        self.tb.debug = False
+        self.tb.set_focus_box("main", "chat")
+
+        # Socket variables
         self.host = host
-        self.portChat = portChat
-        self.portVoice = portVoice
-        self.clientChat = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.clientChat.connect((self.host, self.portChat))
-        self.chatActive = True
-        self.passwordOk = False
+        self.port = port
+        self.serverComm = None
+
+        # General variables
+        self.active = False
+        self.onlineUsers = list()
+        self.commandPrefix = "!"
+        self.passwordMode = True
         self.passwordString = ""
 
-        # Curses display items
-        self.inputString = ""
-        self.messages = []
-        self.lineQueue = []
-        self.scrollIndex = 0
-        self.cursorPos = 0
-        self.visualCursorPos = 0
-        self.visualLeftPos = 0
-        self.visualRightPos = 0
-        self.onlineUsers = []
 
-        # Audio file paths
-        self.new_message_mp3 = "Sounds/new_message.mp3"
-        self.new_user_mp3 = "Sounds/new_user.mp3"
+    def start(self):
+        """ Start ChatApp client. """
+        # Initialize socket
+        self.serverComm = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.serverComm.settimeout(10)
+        try:
+            self.serverComm.connect((self.host, self.port))
+        except:
+            print("Could not connect to the server")
+            return
 
-        # PyAudio
-        chunkSize = 1024
-        audioFormat = pyaudio.paInt16
-        channels = 1
-        rate = 20000
+        # Start the GUI
+        self.tb.start()
+        self.add_chat_info_message("SERVER", "Please enter the correct password to enter ChatApp", "yellow")
 
-        self.pyaudio = pyaudio.PyAudio()
-        self.playingStream = self.pyaudio.open( format = audioFormat,
-                                                channels = channels,
-                                                rate = rate,
-                                                output = True,
-                                                frames_per_buffer = chunkSize)
-
-        self.recordingStream = self.pyaudio.open(   format = audioFormat,
-                                                    channels = channels,
-                                                    rate = rate,
-                                                    input = True,
-                                                    frames_per_buffer = chunkSize)
-        # voice actions
-        self.voiceActive = False
-        self.voiceMicMuted = False
-        self.voiceHeadsetMuted = False
-
-        # Create the Logs folder if it doesn't exist
-        Path("Logs").mkdir(parents = True, exist_ok = True)
-
-        # Get the chat log
-        if os.path.exists("Logs/chatLog.txt"):
-            self.read_chat_log()
-            self.update()
+        # Start the incoming package thread
+        self.active = True
+        self.__incoming_package_thread()
 
 
-    def run(self):
-        """ The main function call. """
-        self.append_notification("SERVER", "Please enter the correct password to enter ChatApp", self.get_time(), "yellow")
-        self.update()
-
-        start_new_thread(self.__chat_thread, ())
-
-        self.__key_handler()
-
-        curses.endwin()
+    def stop(self):
+        """ Stop ChatApp client. """
+        self.active = False
+        self.send_package(pt.P_TYPE["command"], None, "stop", None)
+        self.serverComm.close()
 
 
-    def __key_handler(self):
-        """ Handler of key presses. """
-        while True:
+    def character_callback(self, character):
+        """ Callback function from TerminalTextBoxes module for every key press.
+            Arguments:
+                character               - The character sent from the TerminalTextBoxes module.     (character)
+        """
+        if character == "\x1b":
+            self.stop()
+            return
 
-            char = self.screen.get_wch()
-            #self.append_message("Key-press", repr(char), "", "green")
-
-            if char == "\x1b":                  # ESC KEY
-                self.exit()
-                break
-
-            elif char == 259:                   # ARROW UP KEY (Scroll up)
-                if len(self.lineQueue) + self.scrollIndex > self.textboxHeight:
-                    self.scrollIndex -= 1
-
-            elif char == 258:                   # ARROW DOWN KEY (Scroll down)
-                if self.scrollIndex != 0:
-                    self.scrollIndex += 1
-
-            elif char == 260:                   # ARROW LEFT KEY (Scroll left)
-                if self.visualCursorPos != 0:
-                    self.visualCursorPos -= 1
-                if self.cursorPos != 0:
-                    self.cursorPos -= 1
-
-            elif char == 261:                   # ARROW RIGHT KEY (Scroll right)
-                if self.visualCursorPos < len(self.inputString) and self.visualCursorPos != self.lineWidth:
-                    self.visualCursorPos += 1
-                if self.cursorPos < len(self.inputString):
-                    self.cursorPos += 1
-
-            elif char == "\x00":                # WINDOWS KEY
-                pass
-
-            elif char == curses.KEY_RESIZE:     # RESIZE EVENT
-                self.cursorPos = 0
-                self.visualCursorPos = 0
-
-            elif char == 262:                   # HOME KEY
-                self.visualCursorPos = 0
-                self.cursorPos = 0
-
-            elif char == 358 or char == 360:    # END KEY
-                if len(self.inputString) >= self.lineWidth:
-                    self.visualCursorPos = self.lineWidth
-                else:
-                    self.visualCursorPos = len(self.inputString)
-                self.cursorPos = len(self.inputString)
-
-            elif char == "\n":                  # ENTER KEY
-                if self.passwordOk:
-                    if self.inputString != "":
-                        if not self.command_handler(self.inputString):
-                            self.send(0, self.inputString)
-                else:
-                    self.clientChat.send(self.passwordString.encode())
-                    self.passwordString = ""
-
-                self.inputString = ""
-                self.scrollIndex = 0
-                self.visualCursorPos = 0
-                self.cursorPos = 0
-
-            elif char == 330:                   # DELETE KEY
-                self.inputString = self.inputString[:self.cursorPos] + self.inputString[self.cursorPos:][1:]
-                if not self.passwordOk:
-                    self.passwordString = self.passwordString[:self.cursorPos] + self.passwordString[self.cursorPos:][1:]
-
-                if len(self.inputString) >= self.lineWidth:
-                    if len(self.inputString) == (self.visualRightPos - 1) and self.visualCursorPos != self.lineWidth:
-                        self.visualCursorPos += 1
-
-            elif char == "\x08" or char == 263: # BACKSPACE KEY
-                self.inputString = self.inputString[:self.cursorPos][:-1] + self.inputString[self.cursorPos:]
-                if not self.passwordOk:
-                    self.passwordString = self.passwordString[:self.cursorPos][:-1] + self.passwordString[self.cursorPos:]
-
-                if self.visualCursorPos != 0 and len(self.inputString) <= self.lineWidth and self.visualLeftPos == 0:
-                    self.visualCursorPos -= 1
-                elif self.visualCursorPos != 0 and len(self.inputString) >= self.lineWidth and self.visualLeftPos == 0:
-                    self.visualCursorPos -= 1
-                if self.cursorPos != 0:
-                    self.cursorPos -= 1
-
-            elif char == 339:                   # PAGE UP
-                self.scrollIndex -= self.textboxHeight
-                if self.scrollIndex < -(len(self.lineQueue) - self.textboxHeight):
-                    self.scrollIndex = -(len(self.lineQueue) - self.textboxHeight)
-
-            elif char == 338:                   # PAGE DOWN
-                self.scrollIndex += self.textboxHeight
-                if self.scrollIndex > 0:
-                    self.scrollIndex = 0
-
-            elif char == "\x16":                # CTRL + V (paste)
-                try:
-                    copy = self.get_clipboard()
-                    if copy != None and copy != False:
-                        self.inputString = self.inputString[:self.cursorPos] + copy + self.inputString[self.cursorPos:]
-                        self.cursorPos += len(copy)
-                        if (self.visualCursorPos + len(copy)) >= self.lineWidth:
-                            self.visualCursorPos = self.lineWidth
-                        else:
-                            self.visualCursorPos += len(copy)
-
-                except Exception as e:
-                    pass
-
-            else:                               # Append characters to self.inputString
-                if self.passwordOk:
-                    self.inputString = self.inputString[:self.cursorPos] + str(char) + self.inputString[self.cursorPos:]
-                else:
-                    self.passwordString = self.passwordString[:self.cursorPos] + str(char) + self.passwordString[self.cursorPos:]
-                    self.inputString = self.inputString[:self.cursorPos] + "*" + self.inputString[self.cursorPos:]
-
-                if self.visualCursorPos != self.lineWidth:
-                    self.visualCursorPos += 1
-                self.cursorPos += 1
-
-            self.update()
+        # Password mode
+        if self.passwordMode and uni.isUnicode(character):
+            cPos = self.tb.get_prompt_cursor_pos()
+            self.passwordString = self.passwordString[:cPos] + str(character) + self.passwordString[cPos:]
+            self.tb.set_prompt_string(len(self.passwordString) * "*")
+            return
 
 
-    def __chat_thread(self):
-        """ Thread for incoming chat data. """
-        while self.chatActive:
-            try:
-                received = self.clientChat.recv(2048)
-                package = pickle.loads(received)
+    def enter_callback(self, message):
+        """ Callback function from TerminalTextBoxes module for every enter pressed.
+            Arguments:
+                message                 - The message received from the TerminalTextBoxes module.   (str)
+        """
+        if message == "":
+            return
 
-                if len(package) == 3:
-                    pType = package[0]
-                    pFrom = package[1]
-                    pData = package[2]
+        # Password mode
+        if self.passwordMode:
+            self.serverComm.send(self.passwordString.encode())
+            self.passwordString = ""
+            return
 
-                    self.check_play_sound(pType, pFrom, pData)
-
-                    if pType == 0:              # Forward type
-                        self.append_message(pFrom, pData, self.get_time(), "green")
-                        self.update()
-
-                    elif pType == 1:            # Notification type
-                        self.append_notification(pFrom, pData, self.get_time(), "yellow")
-                        self.update()
-
-                    elif pType == 2:            # Users online
-                        for line in pData:
-                            if self.scrollIndex != 0:
-                                self.scrollIndex -= 1
-                            self.messages.append([line, curses.color_pair(self.colors["yellow"])])
-                            self.lineQueue.append([line, curses.color_pair(self.colors["yellow"])])
-                        self.update()
-
-                    elif pType == 3:            # Update online users
-                        self.onlineUsers = []
-                        for user in pData:
-                            self.onlineUsers.append(user)
-                        self.update()
-
-                    elif pType == 4:            # Password check
-                        if "Correct" in pData:
-                            self.append_notification(pFrom, pData, self.get_time(), "green")
-                            self.passwordOk = True
-                        else:
-                            self.append_notification(pFrom, pData, self.get_time(), "red")
-                        self.update()
-
-                    elif pType == 5:            # Returned checked inputString
-                        self.append_message("You", pData, self.get_time(), "white")
-                        self.update()
-
-
-            except Exception as e:
-                #print(repr(e))
-                continue
-
-
-    def __voice_receive_thread(self):
-        """ Thread for receiving voice data. """
-        while self.voiceActive:
-            try:
-                data = self.clientVoice.recv(1024)
-                if not self.voiceHeadsetMuted:
-                    self.playingStream.write(data)
-            except:
-                pass
-
-
-    def __voice_send_thread(self):
-        """ Thread for sending voice data. """
-        while self.voiceActive:
-            try:
-                data = self.recordingStream.read(1024)
-                if not self.voiceMicMuted:
-                    self.clientVoice.sendall(data)
-            except:
-                pass
-
-
-    def check_play_sound(self, pType, pFrom, pData):
-        """ Check if sound should be played. """
-        if pType == 0:
-            active = self.get_active_window()
-            if "ChatApp" not in active:
-                playsound(self.new_message_mp3, False)
-        elif pType == 1:
-            if pFrom == "SERVER" and "just connected." in pData:
-                playsound(self.new_user_mp3, False)
-
-
-    def send(self, pRequ, pData):
-        """ Send request and data to server. """
-        self.clientChat.send(pickle.dumps([pRequ, pData]))
+        # Regular mode
+        if not self.command_handler(message):
+            # If not a command, send as regular message
+            self.send_package(pt.P_TYPE["message"], message, None, None)
 
 
     def command_handler(self, string):
-        """ Handler for commands. """
-        if string == "!c" or string == "!clear":
-            self.messages.clear()
-            self.lineQueue.clear()
+        """ Handler for commands.
+            Arguments:
+                string          - the string to be evaluated as a command or not.       (str)
+        """
+        p = self.commandPrefix
+
+        # Local commands
+        if string == f"{p}c" or string == f"{p}clear":
+            self.tb.clear_text_items("main", "chat")
             self.update()
             return True
-
-        elif string.startswith("!setNickname "):
-            string = string.replace("!setNickname ", "")
-            self.send(1, string)
+        elif string == f"{p}getUsers":
+            users = str(self.onlineUsers)
+            users = users[1:][:-1]
+            string = f"Online users: {users}"
+            self.add_info_prompt_message(string, "yellow")
             return True
 
-        elif string == "!users":
-            self.send(2, string)
-            return True
 
-        elif string == "!voice on":
-            if self.voiceActive == False:
-                self.voiceActive = True
-                self.clientVoice = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.clientVoice.connect((self.host, self.portVoice))
-                start_new_thread(self.__voice_receive_thread, ())
-                start_new_thread(self.__voice_send_thread, ())
-            return True
-        elif string == "!voice off":
-            if self.voiceActive == True:
-                self.voiceActive = False
-                self.clientVoice.close()
-            return True
-
-        elif string == "!mute mic":
-            if self.voiceMicMuted == False and self.voiceActive:
-                self.voiceMicMuted = True
-                self.send(3, "just muted mic.")
-            return True
-
-        elif string == "!unmute mic":
-            if self.voiceMicMuted == True and self.voiceActive:
-                self.voiceMicMuted = False
-                self.send(4, "just unmuted mic.")
-            return True
-
-        elif string == "!mute headset":
-            if self.voiceHeadsetMuted == False and self.voiceActive:
-                self.voiceHeadsetMuted = True
-                self.send(5, "just muted headset.")
-            return True
-
-        elif string == "!unmute headset":
-            if self.voiceHeadsetMuted == True and self.voiceActive:
-                self.voiceHeadsetMuted = False
-                self.send(6, "just unmuted headset.")
-            return True
+        # Send the command to the server if the command wasn't local
+        if string.startswith(self.commandPrefix):
+            string = string[len(self.commandPrefix):]
+            for command in pt.CLIENT_COMMANDS:
+                if string.startswith(command + " "):
+                    string = string.replace(command + " ", "")
+                    self.send_package(pt.P_TYPE["command"], string, command, None)
+                    return True
 
         return False
 
 
-    def update(self):
-        """ Update all. """
-        self.update_screen_size()
-        if self.textboxWidth >= self.MIN_TEXTBOX_WIDTH and self.textboxHeight >= self.MIN_TEXTBOX_HEIGHT:
-            self.update_message_formatting()
-            self.screen.clear()
-            self.update_textbox()
-            self.update_infobox()
-            self.update_inputbox()
-            self.update_visual_cursor()
-        self.update_refresh()
+    def send_package(self, pType, pData, pInfo, pInitiator):
+        """ Send a package to the server.
+            Arguments:
+                pType               - The type of message P_TYPE.   (int)
+                pData               - The data to be sent.          (any)
+                pInfo               - Additional info.              (any)
+                pInitiator          - The initiator of the message. (str)
+        """
+        package = pt.create_package(pType, pData, pInfo, pInitiator)
+        self.serverComm.send(package)
 
 
-    def update_screen_size(self):
-        """ Update the screen size. """
-        self.screenHeight, self.screenWidth = self.screen.getmaxyx()
-        self.textboxHeight = self.screenHeight - 2
-        self.textboxWidth = self.screenWidth - self.INFOBOX_WIDTH
-        self.infoboxStartPos = self.textboxWidth
-        self.lineWidth = self.screenWidth - 3
+    def __incoming_package_thread(self):
+        """ Thread for incoming package data. """
+        while self.active:
+            try:
+                recv = self.serverComm.recv(2048)
+                pkg = json.loads(recv.decode("utf-8"))
 
+                if not pt.valid_package(pkg, False):
+                    # Invalid package, skip this time
+                    continue
 
-    def update_textbox(self):
-        """ Update the textbox with data from self.lineQueue. """
-        displayText = []
-        if len(self.lineQueue) >= self.textboxHeight:
-            displayText = self.lineQueue[-self.textboxHeight + self.scrollIndex:][:self.textboxHeight]
-        else:
-            displayText = self.lineQueue
+                if pkg["type"] == pt.P_TYPE["command"]:
+                    if pkg["info"] == "updateUsers":
+                        self.onlineUsers = list()
+                        for user in pkg["data"]:
+                            self.onlineUsers.append(user)
+                        self.update_infobox()
+                    elif pkg["info"] == "password":
+                        if "Correct" in pkg["data"]:
+                            self.add_info_prompt_message(pkg["data"], "green")
+                            self.passwordMode = False
+                        else:
+                            self.add_info_prompt_message(pkg["data"], "red")
 
-        for index, line in enumerate(displayText):
-            self.screen.addstr(index, 0, line[0], line[1])
+                elif pkg["type"] == pt.P_TYPE["message"]:
+                    self.add_chat_user_message(pkg["initiator"], pkg["data"], "green")
 
-        for column in range(0, self.lineWidth + 3):
-            self.screen.addstr(self.screenHeight-2, column, "═")
+                elif pkg["type"] == pt.P_TYPE["notify"]:
+                    if pkg["info"] == "chat_info":
+                        self.add_chat_info_message(pkg["initiator"], pkg["data"], "yellow")
+                    elif pkg["info"] == "info_prompt":
+                        self.add_info_prompt_message(pkg["data"], "yellow")
+
+                elif pkg["type"] == pt.P_TYPE["error"]:
+                    if pkg["info"] == "chat_error":
+                        self.add_chat_info_message(pkg["initiator"], pkg["data"], "red")
+                    elif pkg["info"] == "info_prompt":
+                        self.add_info_prompt_message(pkg["data"], "red")
+
+            except Exception as e:
+                pass
 
 
     def update_infobox(self):
         """ Update the infobox that displays the online users. """
-        self.screen.addstr(0, self.infoboxStartPos + 1, " Online users:")
-
-        for index, user in enumerate(self.onlineUsers):
-            self.screen.addstr(index + 1, self.infoboxStartPos, "  - " + user[:self.INFOBOX_WIDTH - 4])
-
-        for line in range(0, self.textboxHeight + 1):
-            if line == self.textboxHeight:
-                self.screen.addstr(line, self.infoboxStartPos, "╩")
-            else:
-                self.screen.addstr(line, self.infoboxStartPos, "║")
+        self.tb.clear_text_items("main", "info")
+        self.tb.add_text_item("main", "info", " Online users:", "yellow")
+        for user in self.onlineUsers:
+            self.tb.add_text_item("main", "info", f"  - {user}")
+        self.tb.update()
 
 
-    def update_inputbox(self):
-        """ Update the inputbox with data from self.inputString. """
-        try:
-            self.visualLeftPos = self.cursorPos - self.visualCursorPos
-            self.visualRightPos = self.visualLeftPos + self.lineWidth
-
-            displayString = ""
-            if len(self.inputString) >= self.lineWidth:
-                displayString = self.inputString[self.visualLeftPos:self.visualRightPos]
-            else:
-                displayString = self.inputString
-            self.screen.addstr(self.screenHeight-1, 0, "> " + displayString)
-        except:
-            pass
+    def add_chat_user_message(self, who, message, attributes):
+        """ Adds a chat user message to the chat text box.
+            Arguments:
+                who             - Who initiated the info message.                   (str)
+                message         - The message to be added to the chat text box.     (str)
+                attributes      - The attributes of the message.                    (str/list)
+        """
+        who = f"{self.get_time()} < {who} >"
+        self.tb.add_text_item("main", "chat", who, ["white", "standout"])
+        self.tb.add_text_item("main", "chat", message, attributes)
+        self.tb.update()
 
 
-    def update_visual_cursor(self):
-        """ Update the visual cursor in the inputbox. """
-        self.screen.move(self.screenHeight-1, self.visualCursorPos+2)
+    def add_chat_info_message(self, who, message, attributes):
+        """ Adds info message to the chat text box.
+            Arguments:
+                who             - Who initiated the info message.                   (str)
+                message         - The message to be added to the chat text box.     (str)
+                attributes      - The attributes of the message.                    (str/list)
+        """
+        message = f"{self.get_time()} < {who} > {message}"
+        self.tb.add_text_item("main", "chat", message, attributes)
+        self.tb.update()
 
 
-    def update_refresh(self):
-        """ Refresh the screen. """
-        self.screen.refresh()
-
-
-    def update_message_formatting(self):
-        """ Update messages dependent on screen width. """
-        self.lineQueue = []
-        for message, color in self.messages:
-            lines = wrap(message, self.textboxWidth)
-            for line in lines:
-                self.lineQueue.append([line, color])
-
-
-    def append_message(self, sender, message, time, color):
-        """ Append a message to self.messages and self.lineQueue. """
-        first_line = time + " " + "< " + sender + " >"
-
-        self.messages.append([first_line, curses.color_pair(self.colors["white"]) | curses.A_STANDOUT])
-        self.write_to_chat_log(first_line, "white", "STANDOUT")
-
-        self.messages.append([message, curses.color_pair(self.colors[color])])
-        self.write_to_chat_log(message, color)
-
-        lines = wrap(message, self.textboxWidth if self.textboxWidth >= self.MIN_TEXTBOX_WIDTH else self.MIN_TEXTBOX_WIDTH)
-        self.lineQueue.append([first_line, curses.color_pair(self.colors["white"]) | curses.A_STANDOUT])
-
-        if self.scrollIndex != 0:
-            self.scrollIndex -= 1
-
-        for line in lines:
-            if self.scrollIndex != 0:
-                self.scrollIndex -= 1
-            self.lineQueue.append([line, curses.color_pair(self.colors[color])])
-
-
-    def append_notification(self, sender, notification, time, color):
-        """  """
-        line = time + " < " + sender + " > " + notification
-
-        if self.scrollIndex != 0:
-            self.scrollIndex -= 1
-
-        self.messages.append([line, curses.color_pair(self.colors[color])])
-        self.write_to_chat_log(line, color)
-        self.lineQueue.append([line, curses.color_pair(self.colors[color])])
-
-
-    def write_to_chat_log(self, line, color, attributes = "None"):
-        """"""
-        if not os.path.exists("Logs/"):
-            Path("Logs").mkdir(parents = True, exist_ok = True)
-        with open("Logs/chatLog.txt", "a+", encoding="utf-8") as f:
-            f.write(str([line, color, attributes]) + "\n")
-
-
-    def read_chat_log(self):
-        """"""
-        newMessages = self.messages
-        chatLog = []
-
-        with open("Logs/chatLog.txt", "r", encoding="utf-8") as f:
-            lines = f.readlines()
-
-        for line in lines:
-            try:
-                line = ast.literal_eval(line)
-                if line[2] == "None":
-                    chatLog.append([line[0], curses.color_pair(self.colors[line[1]])])
-                else:
-                    chatLog.append([line[0], curses.color_pair(self.colors[line[1]]) | curses.A_STANDOUT])
-            except:
-                return
-
-        self.messages = chatLog + newMessages
-        self.update_message_formatting()
-
-
-    def get_active_window(self):
-        """ Returns the name of the active window. """
-        active_window_name = None
-
-        if self.platform in self.platform_windows:
-            try:
-                import win32gui
-            except ImportError:
-                return False
-
-            window = win32gui.GetForegroundWindow()
-            active_window_name = win32gui.GetWindowText(window)
-
-        elif self.platform in self.platform_linux:
-            try:
-                import wnck
-                importOk = True
-            except ImportError:
-                importOk = False
-
-            if importOk:
-                screen = wnck.screen_get_default()
-                screen.force_update()
-                window = screen.get_active_window()
-                if window is not None:
-                    pid = window.get_pid()
-                    with open("/proc/{pid}/cmdline".format(pid=pid)) as f:
-                        active_window_name = f.read()
-            else:
-                try:
-                    from gi.repository import Gtk, Wnck
-                    importOk = True
-                except ImportError:
-                    importOk = False
-                if importOk:
-                    Gtk.init([])
-                    screen = Wnck.Screen.get_default()
-                    screen.force_update()
-                    active_window = screen.get_active_window()
-                    pid = active_window.get_pid()
-                    with open("/proc/{pid}/cmdline".format(pid=pid)) as f:
-                        active_window_name = f.read()
-
-        elif self.platform in self.platform_mac:
-            try:
-                from AppKit import NSWorkspace
-            except ImportError:
-                return False
-
-            active_window_name = (NSWorkspace.sharedWorkspace().activeApplication()['NSApplicationName'])
-
-        else:
-            return False
-
-        return active_window_name
-
-
-    def get_clipboard(self):
-        """ Get system clipboard. """
-        clipboard = None
-
-        if self.platform in self.platform_windows:
-            try:
-                import win32clipboard
-            except ImportError:
-                return None
-
-            win32clipboard.OpenClipboard()
-            clipboard = win32clipboard.GetClipboardData()
-            win32clipboard.CloseClipboard()
-
-        elif self.platform in self.platform_linux:
-            pass
-        elif self.platform in self.platform_mac:
-            pass
-        else:
-            return False
-
-        return clipboard
+    def add_info_prompt_message(self, message, attributes, timeout=5000):
+        """ Adds a message to the info prompt for timeout amount of ms.
+            Arguments:
+                message         - The message to be added to the info prompt.   (str)
+                attributes      - Attributes of the message.                    (str/list)
+                timeout         - The timeout before the message disappears.    (int)
+        """
+        self.tb.set_info_prompt_text_attr(attributes)
+        self.tb.set_info_prompt_text(message, timeout)
+        self.tb.update()
 
 
     def get_time(self):
         """ Returns the current time in format 'HH:MM:SS'. """
-        time = datetime.datetime.now().strftime("%H:%M:%S")
-        return time
-
-
-    def exit(self):
-        """  """
-        self.voiceActive = False
-        self.chatActive = False
+        return datetime.datetime.now().strftime("%H:%M:%S")
 
 
 
 if __name__ == "__main__":
-    client = chat_client(SERVER_IP, 60000, 60001)
-    client.run()
+    host = SERVER_IP
+    port = 60000
+
+    cac = ChatAppClient(host, port)
+    cac.start()

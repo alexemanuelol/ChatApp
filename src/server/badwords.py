@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import re
+
 badwords_en = [
     "4r5e",
     "5h1t",
@@ -594,3 +599,18 @@ badwords_sv = [
 ]
 
 badwords = badwords_en + badwords_sv
+
+def replace_badwords(string):
+    """ Replace bad words with ***.
+        Arguments:
+            string          - The string to filter bad words.       (str)
+    """
+    copy = string
+    lowercase = string.lower()
+    for word in badwords:
+        if word in lowercase:
+            replacement = len(word) * "*"
+            for match in re.finditer(word, lowercase):
+                copy = copy[:match.start()] + replacement + copy[match.end():]
+
+    return copy
