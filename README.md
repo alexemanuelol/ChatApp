@@ -13,6 +13,10 @@ Install the required packages:
     $ pip install -r requirements.txt
     $ pip install -r src/terminal-text-boxes/requirements.txt
 
+Port-forward the used port on your router by following [This guide](https://www.noip.com/support/knowledgebase/general-port-forwarding-guide/).
+
+Set the server ip address and port in the `config.ini` file located [here](src/client/).
+
 
 ## Example
 

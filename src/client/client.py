@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import configparser
 import datetime
 import json
 import os
@@ -252,8 +253,19 @@ class ChatAppClient():
 
 
 if __name__ == "__main__":
-    host = SERVER_IP
-    port = 60000
+    config = configparser.ConfigParser()
+    config.read("config.ini", encoding="utf-8")
+
+    host = str(config["General"]["server_ip"])
+    port = str(config["General"]["server_port"])
+
+    if host == "None":
+        raise Exception("Server address is not set in config.ini.")
+
+    if port == "None":
+        raise Exception("Server port is not set in config.ini.")
+
+    port = int(port)
 
     cac = ChatAppClient(host, port)
     cac.start()
