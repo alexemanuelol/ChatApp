@@ -14,7 +14,7 @@ P_TYPE = {
 # Commands
 CLIENT_COMMANDS = {
     "setNickname"       : 0,
-    "users"             : 1
+    "getUsers"          : 1
 }
 
 SERVER_COMMANDS = {

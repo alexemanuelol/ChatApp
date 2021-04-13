@@ -1,63 +1,63 @@
-# CommandLineChat
-A simple command line chat
-
-
-## TODO
-
-- Make it possible to disconnect and connect, setPort, setIP etc...
-- encrypt messages
-- Set input mic
-- Set output speaker
-- Add V M H to infobox with either color green or red depending on if it's on or off. V = voice, M = mic, H = headset
-- Sound notification
-- pimp server interface
-- Add big green/ red field indicating if you're online or not
-- Add config file for client, default server ip and ports
-
-
-
+# ChatApp
+A Terminal Chat Application that makes you 'shut up' heuheuheu :)
 
 ## Setup
 
-TODO
+To clone the repository:
+
+    $ git clone https://github.com/alexemanuelol/ChatApp.git
+
+Install the required packages:
+
+    $ cd chatapp
+    $ pip install -r requirements.txt
+    $ pip install -r src/terminal-text-boxes/requirements.txt
 
 
+## Example
+
+The server application
+
+![An image of the server application](images/server_image.png)
+
+The client application
+
+![An image of the client application](images/client_image.png)
 
 
+You press `<ESC>` to exit the client application
 
-## Contribute
+## Documentation
 
-### PyAudio setup
+### Package structure
+Every package sent between clients and the server is structured like this:
 
-#### Windows
+    package = {
+        "type"          : None,
+        "data"          : None,
+        "info"          : None,
+        "initiator"     : None
+    }
 
-- Install appropriate .whl file from: https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio
-- Run the following command
+The different package types:
 
-``` bash
-pip3 install <path to .whl file>
-pip3 install pyaudio
-```
-
-
-#### Linux
-
-- Run the following commands
-
-``` bash
-sudo apt-get install libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0
-sudo apt-get install ffmpeg libav-tools
-sudo pip3 install pyaudio
-```
-
-#### Mac OS
-
-TODO
+    types = {
+        "command"       : 0,
+        "message"       : 1,
+        "notify"        : 2,
+        "error"         : 3
+    }
 
 
+### Client Commands
+
+Command prefix is set to: !
+
+Commands:
+- setNickname
+- getUsers
 
 
+Example:
 
-## Known errors
-
-- Only possible to be two current voice chat users at a time, otherwise overflow on the server causing delay in voice data.
+    !setNickname Awesom-O

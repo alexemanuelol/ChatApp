@@ -122,7 +122,7 @@ class ChatAppClient():
         # Local commands
         if string == f"{p}c" or string == f"{p}clear":
             self.tb.clear_text_items("main", "chat")
-            self.update()
+            self.tb.update()
             return True
         elif string == f"{p}getUsers":
             users = str(self.onlineUsers)
